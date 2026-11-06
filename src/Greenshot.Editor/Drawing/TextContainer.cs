@@ -99,12 +99,12 @@ namespace Greenshot.Editor.Drawing
         {
             AddField(GetType(), FieldType.LINE_THICKNESS, 2);
             AddField(GetType(), FieldType.LINE_COLOR, Color.Red);
-            AddField(GetType(), FieldType.SHADOW, true);
+            AddField(GetType(), FieldType.SHADOW, false);
             AddField(GetType(), FieldType.FONT_ITALIC, false);
             AddField(GetType(), FieldType.FONT_BOLD, false);
             AddField(GetType(), FieldType.FILL_COLOR, Color.Transparent);
             AddField(GetType(), FieldType.FONT_FAMILY, FontFamily.GenericSansSerif.Name);
-            AddField(GetType(), FieldType.FONT_SIZE, 11f);
+            AddField(GetType(), FieldType.FONT_SIZE, 14f);
             AddField(GetType(), FieldType.TEXT_HORIZONTAL_ALIGNMENT, StringAlignment.Center);
             AddField(GetType(), FieldType.TEXT_VERTICAL_ALIGNMENT, StringAlignment.Center);
         }

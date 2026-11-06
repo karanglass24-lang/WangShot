@@ -168,6 +168,16 @@ namespace Greenshot.Ipc.Cli
                 return CliParseResult.Ok(envelope);
             }
 
+            // 왕샷: open an empty editor, used by the "Editor" task of the taskbar jump list
+            if (IsAny(first, "--editor"))
+            {
+                if (argv.Count > 1)
+                {
+                    return CliParseResult.Fail($"unexpected argument '{argv[1]}'.", json);
+                }
+                return CliParseResult.Ok(CreateEnvelope("OPEN_EDITOR", cwd));
+            }
+
             if (IsAny(first, "--reload", "--exit", "--version", "-v"))
             {
                 if (argv.Count > 1)

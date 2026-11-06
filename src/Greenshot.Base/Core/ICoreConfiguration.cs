@@ -67,8 +67,8 @@ namespace Greenshot.Base.Core
         bool WelcomeShown { get; set; }
 
         [DataMember(Name = "Destinations")]
-        [Description("Which destinations? Possible options (more might be added by plugins) are: Editor, FileDefault, FileWithDialog, Clipboard, Printer, EMail, Picker, DestinationWindow")]
-        [DefaultValue("Picker")]
+        [Description("Which destinations? Possible options (more might be added by plugins) are: Editor, FileNoDialog, FileDialog, Clipboard, Printer, EMail, Picker, DestinationWindow")]
+        [DefaultValue("Editor,FileNoDialog")]
         List<string> OutputDestinations { get; set; }
 
         [Description("Specify which formats we copy on the clipboard? Options are: PNG, HTML, HTMLDATAURL and DIB")]
@@ -133,11 +133,11 @@ namespace Greenshot.Base.Core
         bool OutputFileAllowOverwrite { get; set; }
 
         [Description("What happens if the file to save already exists: Overwrite, Ask (the save dialog; unattended the name gets a number) or AddNumber (\"name (2).png\").")]
-        [DefaultValue("Overwrite")]
+        [DefaultValue("AddNumber")]
         FileExistsAction OutputFileIfExists { get; set; }
 
         [Description("Filename pattern for screenshot.")]
-        [DefaultValue("${capturetime:d\"yyyy-MM-dd HH_mm_ss\"}-${title}")]
+        [DefaultValue("${prefix}${NUM:p-3,0}")]
         string OutputFileFilenamePattern { get; set; }
 
         [Description("Default file type for writing screenshots.")]
@@ -180,6 +180,14 @@ namespace Greenshot.Base.Core
         [Description("Ask for the quality before saving?")]
         [DefaultValue(false)]
         bool OutputFilePromptQuality { get; set; }
+
+        [Description("Text for ${prefix} in the filename pattern, e.g. a chapter like 3-1_. When it changes, the ${NUM} counter starts again at 1.")]
+        [DefaultValue("")]
+        string OutputFilePrefix { get; set; }
+
+        [Description("The prefix the ${NUM} counter belongs to, set automatically.")]
+        [DefaultValue("")]
+        string OutputFilePrefixOfCounter { get; set; }
 
         [Description("The number for the ${NUM} in the filename pattern, is increased automatically after each save.")]
         [DefaultValue(1)]
@@ -474,7 +482,7 @@ namespace Greenshot.Base.Core
 
         [DataMember(Name = "BaseIconSize")]
         [Description("Defines the base size of the icons (e.g. for the buttons in the editor and the menus) at 100%, in steps of 4, default value 16,16. It's scaled to the DPI of the display the menu or window is on")]
-        [DefaultValue("16,16")]
+        [DefaultValue("28,28")]
         NativeSize IconSize { get; set; }
 
         [Description("The colors of Greenshot's windows and menus: System (follow the Windows settings), Light or Dark. A high contrast theme of Windows always wins.")]

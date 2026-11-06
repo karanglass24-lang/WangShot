@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
   <PropertyGroup>
     <RootNamespace>Greenshot</RootNamespace>
-    <AssemblyName>Greenshot</AssemblyName>
+    <AssemblyName>WangShot</AssemblyName>
     <OutputType>WinExe</OutputType>
     <ApplicationIcon>icons\applicationIcon\icon.ico</ApplicationIcon>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
@@ -21,7 +21,7 @@
   </ItemGroup>
   <!-- Every edition but Full has its name in the version info, so Explorer's file properties show it -->
   <PropertyGroup Condition="'$(GreenshotEdition)' != 'Full'">
-    <Product>Greenshot $(GreenshotEdition)</Product>
+    <Product>왕샷 $(GreenshotEdition)</Product>
   </PropertyGroup>
   <!--
     The full version is a 64-bit exe: COM doesn't give the click on a toast to a Greenshot it started for it when Greenshot.exe is

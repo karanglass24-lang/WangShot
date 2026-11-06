@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
  *
@@ -445,6 +445,7 @@ namespace Greenshot.Editor.Tabs
         protected override void OnPaint(PaintEventArgs e)
         {
             var graphics = e.Graphics;
+            graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             bool dropping = _dropIndex >= 0;
             // A tab can be dropped here: the strip takes a tint of the highlight color
             var theme = EditorTheme.Current;
@@ -513,37 +514,60 @@ namespace Greenshot.Editor.Tabs
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
         }
 
+        /// <summary>
+        /// A rectangle with rounded top corners, for the tabs
+        /// </summary>
+        private static System.Drawing.Drawing2D.GraphicsPath RoundedTop(Rectangle bounds, int radius)
+        {
+            var path = new System.Drawing.Drawing2D.GraphicsPath();
+            int d = Math.Max(2, radius * 2);
+            path.AddArc(bounds.Left, bounds.Top, d, d, 180, 90);
+            path.AddArc(bounds.Right - d, bounds.Top, d, d, 270, 90);
+            path.AddLine(bounds.Right, bounds.Bottom, bounds.Left, bounds.Bottom);
+            path.CloseFigure();
+            return path;
+        }
+
+        private static System.Drawing.Drawing2D.GraphicsPath RoundedRectangle(Rectangle bounds, int radius)
+        {
+            var path = new System.Drawing.Drawing2D.GraphicsPath();
+            int d = Math.Max(2, radius * 2);
+            path.AddArc(bounds.Left, bounds.Top, d, d, 180, 90);
+            path.AddArc(bounds.Right - d, bounds.Top, d, d, 270, 90);
+            path.AddArc(bounds.Right - d, bounds.Bottom - d, d, d, 0, 90);
+            path.AddArc(bounds.Left, bounds.Bottom - d, d, d, 90, 90);
+            path.CloseFigure();
+            return path;
+        }
+
         private void PaintTab(Graphics graphics, Pen borderPen, int index)
         {
             var theme = EditorTheme.Current;
             var tab = _tabs[index];
             var bounds = GetTabBounds(index);
             bool selected = tab == _selectedTab;
+            // A small gap between the tabs, the tab starts a little below the top of the strip
+            var shape = new Rectangle(bounds.Left + Scale(2), bounds.Top + Scale(3), Math.Max(1, bounds.Width - Scale(4)), Math.Max(1, bounds.Height - Scale(3)));
+            int radius = Scale(7);
             if (selected)
             {
-                using var windowBrush = new SolidBrush(theme.Window);
-                graphics.FillRectangle(windowBrush, bounds.Left, bounds.Top, bounds.Width, bounds.Height);
-                graphics.DrawLines(borderPen, new[]
+                using (var path = RoundedTop(shape, radius))
+                using (var windowBrush = new SolidBrush(theme.Window))
                 {
-                    new Point(bounds.Left, bounds.Bottom), new Point(bounds.Left, bounds.Top),
-                    new Point(bounds.Right - 1, bounds.Top), new Point(bounds.Right - 1, bounds.Bottom)
-                });
-            }
-            else
-            {
-                if (index == _hotIndex)
-                {
-                    using var hotBrush = new SolidBrush(theme.HotTab);
-                    graphics.FillRectangle(hotBrush, bounds.Left, bounds.Top, bounds.Width, bounds.Height - 1);
+                    graphics.FillPath(windowBrush, path);
                 }
 
-                // A separator, but not next to the selected tab
-                bool nextSelected = index + 1 < _tabs.Count && _tabs[index + 1] == _selectedTab;
-                if (!nextSelected)
+                // The accent line on top, the tab is open to the canvas below
+                using (var accentPen = new Pen(theme.Highlight, Math.Max(2, Scale(2))) { StartCap = System.Drawing.Drawing2D.LineCap.Round, EndCap = System.Drawing.Drawing2D.LineCap.Round })
                 {
-                    int inset = bounds.Height / 4;
-                    graphics.DrawLine(borderPen, bounds.Right - 1, bounds.Top + inset, bounds.Right - 1, bounds.Bottom - inset);
+                    graphics.DrawLine(accentPen, shape.Left + radius, shape.Top + 1, shape.Right - radius, shape.Top + 1);
                 }
+            }
+            else if (index == _hotIndex)
+            {
+                using var path = RoundedTop(new Rectangle(shape.Left, shape.Top + Scale(2), shape.Width, shape.Height - Scale(2)), radius);
+                using var hotBrush = new SolidBrush(theme.HotTab);
+                graphics.FillPath(hotBrush, path);
             }
 
             bool showsClose = ShowsClose(index);
@@ -569,14 +593,15 @@ namespace Greenshot.Editor.Tabs
             var bounds = NewTabBounds;
             if (_hotNewTab)
             {
+                using var path = RoundedRectangle(new Rectangle(bounds.Left + Scale(2), bounds.Top + Scale(5), Math.Max(1, bounds.Width - Scale(4)), Math.Max(1, bounds.Height - Scale(8))), Scale(6));
                 using var hotBrush = new SolidBrush(theme.HotTab);
-                graphics.FillRectangle(hotBrush, bounds);
+                graphics.FillPath(hotBrush, path);
             }
 
             int inset = bounds.Width / 4;
             int middleX = bounds.Left + bounds.Width / 2;
             int middleY = bounds.Top + bounds.Height / 2;
-            using var plusPen = new Pen(theme.Foreground, Math.Max(1, Scale(1)));
+            using var plusPen = new Pen(theme.Foreground, Math.Max(1.5f, Scale(1))) { StartCap = System.Drawing.Drawing2D.LineCap.Round, EndCap = System.Drawing.Drawing2D.LineCap.Round };
             graphics.DrawLine(plusPen, bounds.Left + inset, middleY, bounds.Right - inset - 1, middleY);
             graphics.DrawLine(plusPen, middleX, bounds.Top + inset, middleX, bounds.Bottom - inset - 1);
         }
@@ -588,11 +613,15 @@ namespace Greenshot.Editor.Tabs
             if (index == _hotIndex && _hotClose)
             {
                 using var hotBrush = new SolidBrush(theme.HotClose);
-                graphics.FillRectangle(hotBrush, closeBounds);
+                graphics.FillEllipse(hotBrush, closeBounds);
             }
 
-            int inset = Scale(4);
-            using var crossPen = new Pen(_tabs[index] == _selectedTab ? theme.WindowText : theme.Foreground, Math.Max(1, Scale(1)));
+            int inset = Scale(5);
+            using var crossPen = new Pen(_tabs[index] == _selectedTab ? theme.WindowText : theme.Foreground, Math.Max(1.5f, Scale(1)))
+            {
+                StartCap = System.Drawing.Drawing2D.LineCap.Round,
+                EndCap = System.Drawing.Drawing2D.LineCap.Round
+            };
             graphics.DrawLine(crossPen, closeBounds.Left + inset, closeBounds.Top + inset, closeBounds.Right - inset - 1, closeBounds.Bottom - inset - 1);
             graphics.DrawLine(crossPen, closeBounds.Left + inset, closeBounds.Bottom - inset - 1, closeBounds.Right - inset - 1, closeBounds.Top + inset);
         }

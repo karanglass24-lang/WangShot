@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
  *
@@ -2094,9 +2094,26 @@ namespace Greenshot.Editor.Drawing
         /// <param name="cutMarkStyle">CutMarkStyle for the edges of the sides which were cut off, None for straight sides</param>
         /// <param name="edgeSettings">TornEdgeEffect with the tooth and shadow settings for the edges, null for the ones of the torn edge effect</param>
         /// <returns>bool</returns>
-        public bool ApplyCrop(NativeRect cropRectangle, CutMarkStyle cutMarkStyle = CutMarkStyle.None, TornEdgeEffect edgeSettings = null)
+        public bool ApplyCrop(NativeRect cropRectangle, CutMarkStyle cutMarkStyle = CutMarkStyle.None, TornEdgeEffect edgeSettings = null, bool allowExpand = false)
         {
-            if (!IsCropPossible(ref cropRectangle, CropContainer.CropModes.Default)) return false;
+            // 왕샷: a rectangle over the edge of the image makes the canvas bigger (white)
+            bool growsCanvas = false;
+            if (allowExpand)
+            {
+                cropRectangle = new NativeRect(cropRectangle.Left, cropRectangle.Top, cropRectangle.Width, cropRectangle.Height).Normalize();
+                if (cropRectangle.Width <= 0 || cropRectangle.Height <= 0)
+                {
+                    return false;
+                }
+                growsCanvas = cropRectangle.Left < 0 || cropRectangle.Top < 0 || cropRectangle.Right > Image.Width || cropRectangle.Bottom > Image.Height;
+            }
+
+            if (growsCanvas)
+            {
+                LOG.Info($"Canvas grows: area {cropRectangle}, image {Image.Width}x{Image.Height}");
+            }
+
+            if (!growsCanvas && !IsCropPossible(ref cropRectangle, CropContainer.CropModes.Default)) return false;
 
             // top, right, bottom, left
             var cutSides = new[] { cropRectangle.Top > 0, cropRectangle.Right < Image.Width, cropRectangle.Bottom < Image.Height, cropRectangle.Left > 0 };
@@ -2127,7 +2144,7 @@ namespace Greenshot.Editor.Drawing
             // Make sure we have information, this this fails
             try
             {
-                newImage = ImageHelper.CloneArea(Image, cropRectangle, PixelFormat.DontCare);
+                newImage = growsCanvas ? ComposeOnCanvas(Image, cropRectangle) : ImageHelper.CloneArea(Image, cropRectangle, PixelFormat.DontCare);
                 if (margins.Any(m => m > 0))
                 {
                     var expanded = ExpandImage(newImage, settings.BackgroundColor, margins);
@@ -2197,8 +2214,11 @@ namespace Greenshot.Editor.Drawing
             var offset = new NativePoint(margins[3] - cropRectangle.Left, margins[0] - cropRectangle.Top);
             // Make undoable, the memento takes the current image
             // The HDR image is cropped the same way, on the room for the torn edges like ExpandImage makes it
-            DeriveHdrImage(Image, newImage, ImageEdits.PlaceOnBackground(cropRectangle, new NativeSize(newImage.Width, newImage.Height), new NativePoint(margins[3], margins[0]),
-                settings?.BackgroundColor ?? Color.Transparent));
+            if (!growsCanvas)
+            {
+                DeriveHdrImage(Image, newImage, ImageEdits.PlaceOnBackground(cropRectangle, new NativeSize(newImage.Width, newImage.Height), new NativePoint(margins[3], margins[0]),
+                    settings?.BackgroundColor ?? Color.Transparent));
+            }
             MakeUndoable(new SurfaceCutOutMemento(this, Image, movedElements, new NativePoint(-offset.X, -offset.Y), removedElements, addedElements, edgeLayouts), false);
 
             // Do not dispose otherwise we can't undo the image!
@@ -2206,6 +2226,19 @@ namespace Greenshot.Editor.Drawing
             // It was created for the old image size, this makes it cover the new one
             cropEdges?.MoveBy(0, 0);
             return true;
+        }
+
+        /// <summary>
+        /// The part of the plane given by the area (which may reach over the edges of the image) as a new image: the image where it is, white around it
+        /// </summary>
+        private static Bitmap ComposeOnCanvas(Image image, NativeRect area)
+        {
+            bool alpha = Image.IsAlphaPixelFormat(image.PixelFormat);
+            Bitmap canvas = ImageHelper.CreateEmpty(area.Width, area.Height, alpha ? PixelFormat.Format32bppArgb : PixelFormat.Format24bppRgb,
+                Color.White, image.HorizontalResolution, image.VerticalResolution);
+            using var graphics = Graphics.FromImage(canvas);
+            graphics.DrawImage(image, new Rectangle(-area.Left, -area.Top, image.Width, image.Height), new Rectangle(0, 0, image.Width, image.Height), GraphicsUnit.Pixel);
+            return canvas;
         }
 
         /// <summary>
@@ -2692,11 +2725,70 @@ namespace Greenshot.Editor.Drawing
                 selectedElements.Selected = true;
             }
 
+            // The crop rectangle of the plain crop mode is applied when the mouse is released, no extra confirmation (Ctrl+Z undoes it)
+            bool drewCropRectangle = DrawingMode == DrawingModes.Crop && _cropContainer != null && ReferenceEquals(_drawingElement, _cropContainer)
+                                     && _cropContainer is CropContainer plainCrop
+                                     && plainCrop.GetFieldValue(FieldType.CROPMODE) is CropContainer.CropModes.Default;
+
+            // A click without a drag only gets a default size in FinishDrawingElement: it must not crop
+            bool draggedEnough = drewCropRectangle && Math.Abs(_drawingElement.Width) >= 5 && Math.Abs(_drawingElement.Height) >= 5;
+
+            var finishedElement = _drawingElement;
             if (_drawingElement != null)
             {
                 FinishDrawingElement(currentMouse);
             }
+
+            ExpandCanvasForElement(finishedElement);
+
+            if (draggedEnough && _cropContainer != null)
+            {
+                BeginInvoke(new Action(() =>
+                {
+                    if (!IsDisposed && DrawingMode == DrawingModes.Crop && _cropContainer != null)
+                    {
+                        ConfirmCrop(true);
+                    }
+                }));
+            }
         }
+
+        /// <summary>
+        /// 왕샷: an element which was drawn (partly) outside of the image makes the canvas bigger, so it fits
+        /// </summary>
+        private void ExpandCanvasForElement(IDrawableContainer element)
+        {
+            if (element == null || element is CropContainer or CutMarkContainer or TornEdgeContainer or FilterContainer || !_elements.Contains(element))
+            {
+                return;
+            }
+
+            var bounds = element.Bounds.Normalize();
+            if (bounds.Left >= 0 && bounds.Top >= 0 && bounds.Right <= Image.Width && bounds.Bottom <= Image.Height)
+            {
+                return;
+            }
+
+            // A little room for the thickness of the line
+            int left = Math.Min(0, bounds.Left - 3);
+            int top = Math.Min(0, bounds.Top - 3);
+            int right = Math.Max(Image.Width, bounds.Right + 3);
+            int bottom = Math.Max(Image.Height, bounds.Bottom + 3);
+            if (ApplyCrop(new NativeRect(left, top, right - left, bottom - top), CutMarkStyle.None, null, true))
+            {
+                SelectElement(element);
+                element.Selected = true;
+            }
+        }
+
+        /// <summary>
+        /// The mouse events of the area around the image (the editor forwards them while a drawing tool is active), so an element can start outside of the image
+        /// </summary>
+        public void ForwardMouseDown(MouseEventArgs e) => SurfaceMouseDown(this, e);
+
+        public void ForwardMouseMove(MouseEventArgs e) => SurfaceMouseMove(this, e);
+
+        public void ForwardMouseUp(MouseEventArgs e) => SurfaceMouseUp(this, e);
 
         /// <summary>
         /// A crop rectangle which was drawn but not confirmed is removed when something else is drawn, or a new crop rectangle
@@ -3733,7 +3825,7 @@ namespace Greenshot.Editor.Drawing
                 {
                     CropContainer.CropModes.Horizontal => ApplyCutOut(_cropContainer.Bounds, CropContainer.CropModes.Horizontal, GetCutMarkStyle(e)),
                     CropContainer.CropModes.Vertical => ApplyCutOut(_cropContainer.Bounds, CropContainer.CropModes.Vertical, GetCutMarkStyle(e)),
-                    _ => ApplyCrop(_cropContainer.Bounds, GetCutMarkStyle(e))
+                    _ => ApplyCrop(_cropContainer.Bounds, GetCutMarkStyle(e), null, true)
                 };
 
                 _cropContainer.Dispose();

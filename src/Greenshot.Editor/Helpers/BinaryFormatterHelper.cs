@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
  * 
@@ -77,6 +77,7 @@ namespace Greenshot.Editor.Helpers
             {"Greenshot.Editor.Drawing.StepLabelContainer", typeof(StepLabelContainer) },
             // Only used for the last used field values in the .ini
             {"Greenshot.Editor.Drawing.CutMarkStyle", typeof(CutMarkStyle) },
+            {"Greenshot.Editor.Drawing.StepLabelShape", typeof(StepLabelShape) },
             {"Greenshot.Editor.Drawing.CropContainer+CropModes", typeof(CropContainer.CropModes) },
             {"Greenshot.Editor.Drawing.SvgContainer", typeof(SvgContainer) },
             {"Greenshot.Editor.Drawing.Emoji.EmojiContainer", typeof(EmojiContainer) },

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026  Thomas Braun, Jens Klingen, Robin Krom
  *
@@ -37,6 +37,16 @@ namespace Greenshot.Editor.Drawing
     /// This is an enumerated label, every single StepLabelContainer shows the number of the order it was created.
     /// To make sure that deleting recalculates, we check the location before every draw.
     /// </summary>
+    /// <summary>
+    /// The shape of a step label (the numbered marker)
+    /// </summary>
+    public enum StepLabelShape
+    {
+        Circle,
+        Rectangle,
+        Triangle
+    }
+
     [Serializable]
     public sealed class StepLabelContainer : DrawableContainer, IHaveScaleOptions
     {
@@ -101,6 +111,11 @@ namespace Greenshot.Editor.Drawing
                 // actively set because AddField above uses 0 as default but overrides it with current value from config file
                 SetFieldValue(FieldType.LINE_THICKNESS, 0);
             }
+            if (!HasField(FieldType.STEP_SHAPE))
+            {
+                AddField(GetType(), FieldType.STEP_SHAPE, StepLabelShape.Circle);
+                SetFieldValue(FieldType.STEP_SHAPE, StepLabelShape.Circle);
+            }
             if (!HasField(FieldType.SHADOW))
             {
                 AddField(GetType(), FieldType.SHADOW, false);
@@ -132,7 +147,7 @@ namespace Greenshot.Editor.Drawing
             newParentSurface.AddStepLabel(this);
         }
 
-        public override NativeSize DefaultSize => new NativeSize(30, 30);
+        public override NativeSize DefaultSize => new NativeSize(36, 36);
 
         public override bool InitContent()
         {
@@ -160,11 +175,12 @@ namespace Greenshot.Editor.Drawing
         /// </summary>
         protected override void InitializeFields()
         {
-            AddField(GetType(), FieldType.FILL_COLOR, Color.DarkRed);
+            AddField(GetType(), FieldType.FILL_COLOR, Color.FromArgb(0xE5, 0x39, 0x35));
             AddField(GetType(), FieldType.LINE_COLOR, Color.White);
             AddField(GetType(), FieldType.LINE_THICKNESS, 0);
             AddField(GetType(), FieldType.SHADOW, false);
             AddField(GetType(), FieldType.FLAGS, FieldFlag.COUNTER);
+            AddField(GetType(), FieldType.STEP_SHAPE, StepLabelShape.Circle);
         }
 
         /// <summary>
@@ -218,18 +234,60 @@ namespace Greenshot.Editor.Drawing
             int lineThickness = GetFieldValueAsInt(FieldType.LINE_THICKNESS);
             bool shadow = GetFieldValueAsBool(FieldType.SHADOW);
 
-            if (_drawAsRectangle)
+            switch (Shape)
             {
-                RectangleContainer.DrawRectangle(rect, graphics, rm, lineThickness, lineColor, fillColor, shadow);
-            }
-            else
-            {
-                EllipseContainer.DrawEllipse(rect, graphics, rm, lineThickness, lineColor, fillColor, shadow);
+                case StepLabelShape.Rectangle:
+                    RectangleContainer.DrawRectangle(rect, graphics, rm, lineThickness, lineColor, fillColor, shadow);
+                    break;
+                case StepLabelShape.Triangle:
+                    DrawTriangle(rect, graphics, lineThickness, lineColor, fillColor);
+                    break;
+                default:
+                    EllipseContainer.DrawEllipse(rect, graphics, rm, lineThickness, lineColor, fillColor, shadow);
+                    break;
             }
 
             using FontFamily fam = new(FontFamily.GenericSansSerif.Name);
             using Font font = new(fam, NumberFontSize(text), FontStyle.Bold, GraphicsUnit.Pixel);
-            TextContainer.DrawText(graphics, rect, 0, lineColor, false, _stringFormat, text, font);
+            // The number of a triangle sits in its lower part, where the triangle is wide
+            var textRect = Shape == StepLabelShape.Triangle
+                ? new NativeRect(rect.Left, rect.Top + rect.Height * 2 / 5, rect.Width, rect.Height * 3 / 5)
+                : rect;
+            TextContainer.DrawText(graphics, textRect, 0, lineColor, false, _stringFormat, text, font);
+        }
+
+        /// <summary>
+        /// The shape of the label: a circle, a rectangle or a triangle
+        /// </summary>
+        public StepLabelShape Shape
+        {
+            get
+            {
+                if (_drawAsRectangle)
+                {
+                    return StepLabelShape.Rectangle;
+                }
+                return HasField(FieldType.STEP_SHAPE) && GetFieldValue(FieldType.STEP_SHAPE) is StepLabelShape shape ? shape : StepLabelShape.Circle;
+            }
+        }
+
+        private static PointF[] TrianglePoints(NativeRect rect) => new[]
+        {
+            new PointF(rect.Left + rect.Width / 2f, rect.Top),
+            new PointF(rect.Left + rect.Width, rect.Top + rect.Height),
+            new PointF(rect.Left, rect.Top + rect.Height)
+        };
+
+        private static void DrawTriangle(NativeRect rect, Graphics graphics, int lineThickness, Color lineColor, Color fillColor)
+        {
+            var points = TrianglePoints(rect);
+            using var brush = new SolidBrush(fillColor);
+            graphics.FillPolygon(brush, points);
+            if (lineThickness > 0)
+            {
+                using var pen = new Pen(lineColor, lineThickness) { LineJoin = LineJoin.Round };
+                graphics.DrawPolygon(pen, points);
+            }
         }
 
         /// <summary>
@@ -260,12 +318,14 @@ namespace Greenshot.Editor.Drawing
         {
             var rect = new NativeRect(Left, Top, Width, Height).Normalize();
             Color fillColor = GetFieldValueAsColor(FieldType.FILL_COLOR);
-            if (_drawAsRectangle)
+            switch (Shape)
             {
-                return RectangleContainer.RectangleClickableAt(rect, 0, fillColor, x, y);
+                case StepLabelShape.Rectangle:
+                case StepLabelShape.Triangle:
+                    return RectangleContainer.RectangleClickableAt(rect, 0, fillColor, x, y);
+                default:
+                    return EllipseContainer.EllipseClickableAt(rect, 0, fillColor, x, y);
             }
-
-            return EllipseContainer.EllipseClickableAt(rect, 0, fillColor, x, y);
         }
 
         public ScaleOptions GetScaleOptions() => ScaleOptions.Rational;

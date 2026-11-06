@@ -423,7 +423,16 @@ namespace Greenshot.Base.Core
                         }
 
                         break;
+                    case "prefix":
+                        replaceValue = MakeFilenameSafe(CoreConfig.OutputFilePrefix ?? string.Empty);
+                        break;
                     case "NUM":
+                        // A new prefix (e.g. the next chapter) starts counting at 1 again
+                        if ((CoreConfig.OutputFilePrefixOfCounter ?? string.Empty) != (CoreConfig.OutputFilePrefix ?? string.Empty))
+                        {
+                            CoreConfig.OutputFileIncrementingNumber = 0;
+                            CoreConfig.OutputFilePrefixOfCounter = CoreConfig.OutputFilePrefix ?? string.Empty;
+                        }
                         CoreConfig.OutputFileIncrementingNumber++;
                         replaceValue = CoreConfig.OutputFileIncrementingNumber.ToString();
                         if (padWidth == 0)

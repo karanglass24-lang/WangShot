@@ -55,11 +55,11 @@ namespace Greenshot.Editor.Drawing
         /// </summary>
         protected override void InitializeFields()
         {
-            AddField(GetType(), FieldType.LINE_THICKNESS, 2);
+            AddField(GetType(), FieldType.LINE_THICKNESS, 3);
             AddField(GetType(), FieldType.ARROWHEADS, 2);
             AddField(GetType(), FieldType.LINE_COLOR, Color.Red);
             AddField(GetType(), FieldType.FILL_COLOR, Color.Transparent);
-            AddField(GetType(), FieldType.SHADOW, true);
+            AddField(GetType(), FieldType.SHADOW, false);
             AddField(GetType(), FieldType.ARROWHEADS, ArrowHeadCombination.END_POINT);
         }
 

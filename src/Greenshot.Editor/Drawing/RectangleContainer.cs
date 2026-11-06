@@ -60,10 +60,10 @@ namespace Greenshot.Editor.Drawing
 
         protected override void InitializeFields()
         {
-            AddField(GetType(), FieldType.LINE_THICKNESS, 2);
+            AddField(GetType(), FieldType.LINE_THICKNESS, 3);
             AddField(GetType(), FieldType.LINE_COLOR, Color.Red);
             AddField(GetType(), FieldType.FILL_COLOR, Color.Transparent);
-            AddField(GetType(), FieldType.SHADOW, true);
+            AddField(GetType(), FieldType.SHADOW, false);
         }
 
         public override void Draw(Graphics graphics, RenderMode rm)

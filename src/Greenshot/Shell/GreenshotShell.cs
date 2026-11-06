@@ -277,6 +277,8 @@ namespace Greenshot.Shell
             {
                 ApplicationStartupHelper.ShowWelcome();
             }
+            // Windows may open its own snipping tool on PrintScreen: ask once whether to turn that off
+            _ = UiDispatcher.Dispatcher.BeginInvoke(new Action(Greenshot.Helpers.PrintScreenGuard.CheckAndAsk), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
 #if !GREENSHOT_LIGHT
             // Plugins which aren't signed like Greenshot.exe: the question comes after the start, not inside it
             if (PluginHelper.Instance.HeldBackPlugins.Count > 0)

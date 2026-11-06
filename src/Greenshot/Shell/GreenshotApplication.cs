@@ -254,6 +254,33 @@ namespace Greenshot.Shell
                 GreenshotMain.Application_ThreadException(sender, new ThreadExceptionEventArgs(args.Exception));
                 args.Handled = true;
             };
+            SetJumpList(wpfApplication);
+        }
+
+        /// <summary>
+        /// The right click menu of the taskbar button (or the pinned taskbar shortcut): a task which opens the editor
+        /// </summary>
+        private static void SetJumpList(System.Windows.Application wpfApplication)
+        {
+            try
+            {
+                var jumpList = new System.Windows.Shell.JumpList { ShowFrequentCategory = false, ShowRecentCategory = false };
+                jumpList.JumpItems.Add(new System.Windows.Shell.JumpTask
+                {
+                    Title = "편집기 열기",
+                    Description = "빈 이미지 편집기를 엽니다",
+                    ApplicationPath = System.Windows.Forms.Application.ExecutablePath,
+                    Arguments = "--editor",
+                    IconResourcePath = System.Windows.Forms.Application.ExecutablePath,
+                    IconResourceIndex = 0
+                });
+                System.Windows.Shell.JumpList.SetJumpList(wpfApplication, jumpList);
+                jumpList.Apply();
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("Couldn't set the jump list of the taskbar", ex);
+            }
         }
 
 

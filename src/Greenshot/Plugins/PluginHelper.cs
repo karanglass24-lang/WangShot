@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
  * 
@@ -215,14 +215,7 @@ namespace Greenshot.Plugins
         {
             var pluginFiles = new List<string>();
 
-            if (GreenshotEnvironment.IsPortable)
-            {
-                pluginFiles.AddRange(FindPluginsOnPath(PafPath));
-            }
-            else
-            {
-                pluginFiles.AddRange(FindPluginsOnPath(ApplicationPath));
-            }
+            // 왕샷 doesn't load plugins: pluginFiles stays empty
 
             FoundPluginNames = pluginFiles.Select(ConfigurationRestrictions.PluginNameFromFile).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 

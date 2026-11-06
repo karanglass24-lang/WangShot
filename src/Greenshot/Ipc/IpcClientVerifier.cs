@@ -38,6 +38,8 @@ namespace Greenshot.Ipc
         {
             // A second Greenshot instance forwards its command line
             ["Greenshot.exe"] = new[] { IpcSources.Cli },
+            // 왕샷: the renamed executable
+            ["WangShot.exe"] = new[] { IpcSources.Cli },
             // greenshot-cli.exe, the console front end
             ["greenshot-cli.exe"] = new[] { IpcSources.Cli },
             // greenshot-proxy.exe: greenshot: URLs, Explorer "Open with" and the browser extension (native messaging)

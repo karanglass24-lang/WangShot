@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
  * 
@@ -69,7 +69,8 @@ namespace Greenshot.Base.Core
                 {
                     try
                     {
-                        return destination != null && destination.IsAvailableFor(null);
+                        // 왕샷 has no printer destination
+                        return destination != null && destination.Designation != nameof(WellKnownDestinations.Printer) && destination.IsAvailableFor(null);
                     }
                     catch
                     {

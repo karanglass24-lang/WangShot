@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
  *
@@ -168,6 +168,8 @@ namespace Greenshot.Shell
             captureWindow.InputGestureText = HotkeyText(conf.WindowHotkey);
 
             menu.Items.Add(CreateFullscreenItem(conf));
+            // The mouse cursor in the capture: on or off right here
+            menu.Items.Add(ThemedMenu.CreateCheckItem(Texts.Settings.CaptureMousepointer, conf.CaptureMousepointer, value => conf.CaptureMousepointer = value, GetIcon("contextmenu_mousepointer.Image")));
             menu.Items.Add(ThemedMenu.CreateSeparator());
 
             menu.Items.Add(CreateWindowListItem(conf));
@@ -195,9 +197,15 @@ namespace Greenshot.Shell
             }
 
             AddItem(menu, Texts.Core.ContextmenuOpenfile, "contextmenu_openfile.Image", () => TrayActions.CaptureFile());
+            AddItem(menu, "편집기 열기", "contextmenu_openeditor.Image", TrayActions.OpenEmptyEditor);
             menu.Items.Add(ThemedMenu.CreateSeparator());
 
             AddItem(menu, Texts.Core.ContextmenuOpenrecentcapture, null, TrayActions.OpenLastCaptureLocation);
+
+            // 교재 집필용: 저장 폴더와 파일 이름 접두어(장·절)를 바로 정한다
+            AddItem(menu, "저장 폴더 지정...", null, ChooseOutputFolder);
+            string prefixNow = string.IsNullOrEmpty(conf.OutputFilePrefix) ? "없음" : conf.OutputFilePrefix;
+            AddItem(menu, $"파일 접두어 (장·절): {prefixNow}", null, ChooseFilePrefix);
             menu.Items.Add(ThemedMenu.CreateSeparator());
 
             // The entries of the plugins, with their own separator
@@ -241,12 +249,56 @@ namespace Greenshot.Shell
             var now = DateTime.Now;
             bool showPresent = (now.Month == 12 && now.Day > 19 && now.Day < 27) || // christmas
                                (now.Month == 3 && now.Day > 13 && now.Day < 21); // birthday
-            AddItem(menu, Texts.Core.ContextmenuDonate, showPresent ? "contextmenu_present.Image" : "contextmenu_donate.Image", TrayActions.OpenDonatePage);
             AddItem(menu, Texts.Core.ContextmenuAbout, null, () => _shell.ShowAbout());
             menu.Items.Add(ThemedMenu.CreateSeparator());
 
             AddItem(menu, Texts.Core.ContextmenuExit, "contextmenu_exit.Image", () => _shell.Exit());
             return menu;
+        }
+
+        private static void ChooseOutputFolder()
+        {
+            var conf = CoreConfig;
+            using var dialog = new System.Windows.Forms.FolderBrowserDialog
+            {
+                Description = "스크린샷을 저장할 폴더를 선택하세요",
+                SelectedPath = conf.OutputFilePath ?? string.Empty
+            };
+            if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                conf.OutputFilePath = dialog.SelectedPath;
+            }
+        }
+
+        private static void ChooseFilePrefix()
+        {
+            var conf = CoreConfig;
+            using var form = new System.Windows.Forms.Form
+            {
+                Text = "파일 접두어",
+                FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog,
+                StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen,
+                MinimizeBox = false,
+                MaximizeBox = false,
+                ShowInTaskbar = false,
+                TopMost = true,
+                ClientSize = new System.Drawing.Size(360, 120)
+            };
+            var label = new System.Windows.Forms.Label
+            {
+                Text = "저장 파일 이름 앞에 붙일 글자 (예: 3-1_). 바꾸면 번호가 001부터 다시 시작해요.",
+                Left = 12, Top = 10, Width = 336, Height = 36
+            };
+            var box = new System.Windows.Forms.TextBox { Left = 12, Top = 52, Width = 336, Text = conf.OutputFilePrefix ?? string.Empty };
+            var ok = new System.Windows.Forms.Button { Text = "확인", Left = 192, Top = 84, Width = 75, DialogResult = System.Windows.Forms.DialogResult.OK };
+            var cancel = new System.Windows.Forms.Button { Text = "취소", Left = 273, Top = 84, Width = 75, DialogResult = System.Windows.Forms.DialogResult.Cancel };
+            form.Controls.AddRange(new System.Windows.Forms.Control[] { label, box, ok, cancel });
+            form.AcceptButton = ok;
+            form.CancelButton = cancel;
+            if (form.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                conf.OutputFilePrefix = box.Text.Trim();
+            }
         }
 
         /// <summary>
@@ -548,21 +600,7 @@ namespace Greenshot.Shell
                 }
             }
 
-            // print options
-            var printOptions = ThemedMenu.CreateItem(Texts.Settings.Printoptions);
-            AddBoolMenuItem(printOptions, coreSection, "OutputPrintPromptOptions", Texts.Settings.Alwaysshowprintoptionsdialog, v => conf.OutputPrintPromptOptions = v, conf.OutputPrintPromptOptions);
-            AddBoolMenuItem(printOptions, coreSection, "OutputPrintAllowRotate", Texts.Core.PrintoptionsAllowrotate, v => conf.OutputPrintAllowRotate = v, conf.OutputPrintAllowRotate);
-            AddBoolMenuItem(printOptions, coreSection, "OutputPrintAllowEnlarge", Texts.Core.PrintoptionsAllowenlarge, v => conf.OutputPrintAllowEnlarge = v, conf.OutputPrintAllowEnlarge);
-            AddBoolMenuItem(printOptions, coreSection, "OutputPrintAllowShrink", Texts.Core.PrintoptionsAllowshrink, v => conf.OutputPrintAllowShrink = v, conf.OutputPrintAllowShrink);
-            AddBoolMenuItem(printOptions, coreSection, "OutputPrintCenter", Texts.Core.PrintoptionsAllowcenter, v => conf.OutputPrintCenter = v, conf.OutputPrintCenter);
-            AddBoolMenuItem(printOptions, coreSection, "OutputPrintInverted", Texts.Core.PrintoptionsInverted, v => conf.OutputPrintInverted = v, conf.OutputPrintInverted);
-            AddBoolMenuItem(printOptions, coreSection, "OutputPrintGrayscale", Texts.Core.PrintoptionsPrintgrayscale, v => conf.OutputPrintGrayscale = v, conf.OutputPrintGrayscale);
-            AddBoolMenuItem(printOptions, coreSection, "OutputPrintMonochrome", Texts.Core.PrintoptionsPrintmonochrome, v => conf.OutputPrintMonochrome = v, conf.OutputPrintMonochrome);
-            AddBoolMenuItem(printOptions, coreSection, "OutputPrintFooter", Texts.Core.PrintoptionsTimestamp, v => conf.OutputPrintFooter = v, conf.OutputPrintFooter);
-            if (printOptions.Items.Count > 0)
-            {
-                quickSettings.Items.Add(printOptions);
-            }
+            // 왕샷 has no printing: no print options here
 
             // effects
             var effects = ThemedMenu.CreateItem(Texts.Settings.Visualization);

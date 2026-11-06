@@ -83,7 +83,7 @@ namespace Greenshot.Plugin.Win10
                 {
                     RemoveOldRegistrations();
                 }
-                DesktopToasts.Register(ToastNotificationService.AppId, "Greenshot", WriteIcon(), $"\"{Application.ExecutablePath}\"");
+                DesktopToasts.Register(ToastNotificationService.AppId, "왕샷", WriteIcon(), $"\"{Application.ExecutablePath}\"");
                 var setting = DesktopToasts.GetSetting(ToastNotificationService.AppId);
                 if (setting == NotificationSetting.DisabledByManifest)
                 {
@@ -227,7 +227,7 @@ namespace Greenshot.Plugin.Win10
             }
             if (notification.Lines.Count > 0)
             {
-                content.AddText(notification.Title ?? "Greenshot");
+                content.AddText(notification.Title ?? "왕샷");
                 if (notification.Lines.Count == 1 && statusIcon == null)
                 {
                     // One destination: its icon is the big image (visible also when the toast is collapsed in the notification

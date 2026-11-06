@@ -22,6 +22,7 @@
 using System.Windows.Input;
 using Dapplo.Windows.Common.Extensions;
 using Dapplo.Windows.Common.Structs;
+using Dapplo.Windows.Desktop;
 using Greenshot.Base.Interfaces.Capture;
 using Greenshot.Base.Languages;
 using CaptureMode = Greenshot.Base.Interfaces.CaptureMode;
@@ -59,6 +60,9 @@ namespace Greenshot.Capturing.Tools
             base.Activate(host);
             IsSelecting = false;
             Selection = NativeRect.Empty;
+            _hoverWindow = null;
+            _hoverRect = NativeRect.Empty;
+            _dragged = false;
         }
 
         public override void Deactivate()
@@ -102,15 +106,40 @@ namespace Greenshot.Capturing.Tools
             }
         }
 
+        /// <summary>
+        /// True when the plain region tool also follows the window under the cursor: a click selects that window,
+        /// dragging selects a rectangle. Tools derived for other modes keep the plain rectangle.
+        /// </summary>
+        private bool HoverSelectsWindow => Mode == CaptureMode.Region;
+
+        // The window under the cursor and its visible part in capture coordinates, before the mouse button is pressed
+        private IInteropWindow _hoverWindow;
+        private NativeRect _hoverRect = NativeRect.Empty;
+        // True once the mouse moved far enough to draw a rectangle, then a release is not a click on the window
+        private bool _dragged;
+
         public override void OnMouseMove()
         {
             if (IsSelecting)
             {
                 var cursor = Host.CursorPosition;
                 Selection = new NativeRect(cursor.X, cursor.Y, _start.X - cursor.X, _start.Y - cursor.Y).Normalize();
+                if (Selection.Width > MinimumSize || Selection.Height > MinimumSize)
+                {
+                    _dragged = true;
+                }
+                if (HoverSelectsWindow && !_dragged && !_hoverRect.IsEmpty)
+                {
+                    // Still a click: keep the window highlighted
+                    return;
+                }
                 Host.ShowSelection(Selection);
                 // The selection includes the pixel under the cursor
                 Host.ShowLabels(Selection, new NativeSize(Selection.Width + 1, Selection.Height + 1));
+            }
+            else if (HoverSelectsWindow)
+            {
+                UpdateHoverWindow();
             }
             else if (Host.IsSelectionVisible && !Host.IsSelectionAnimating)
             {
@@ -120,10 +149,46 @@ namespace Greenshot.Capturing.Tools
             }
         }
 
+        /// <summary>
+        /// Highlight the (child) window under the cursor, like the window mode does
+        /// </summary>
+        private void UpdateHoverWindow()
+        {
+            var window = Host.FindWindowUnderCursor(true);
+            if (window == null)
+            {
+                _hoverWindow = null;
+                _hoverRect = NativeRect.Empty;
+                if (Host.IsSelectionVisible && !Host.IsSelectionAnimating)
+                {
+                    Host.HideSelection();
+                    Host.ClearLabels();
+                }
+                return;
+            }
+            if (window.Equals(_hoverWindow))
+            {
+                return;
+            }
+            var screenBounds = Host.ScreenBounds;
+            var rect = window.GetInfo().Bounds
+                .Offset(-screenBounds.X, -screenBounds.Y)
+                .Intersect(new NativeRect(0, 0, screenBounds.Width, screenBounds.Height));
+            _hoverWindow = window;
+            _hoverRect = rect;
+            if (rect.IsEmpty)
+            {
+                return;
+            }
+            Host.ShowSelection(rect, true);
+            Host.ShowLabels(rect, new NativeSize(rect.Width, rect.Height));
+        }
+
         private void StartSelection()
         {
             _start = Host.CursorPosition;
             IsSelecting = true;
+            _dragged = false;
             OnMouseMove();
         }
 
@@ -145,7 +210,18 @@ namespace Greenshot.Capturing.Tools
         /// The mouse was released without selecting a region
         /// </summary>
         /// <returns>true when the click was handled</returns>
-        protected virtual bool OnClick() => false;
+        protected virtual bool OnClick()
+        {
+            if (!HoverSelectsWindow || _dragged || _hoverWindow == null || _hoverRect.IsEmpty)
+            {
+                return false;
+            }
+            var title = _hoverWindow.GetCaption();
+            Host.Capture.CaptureDetails.Title = title;
+            Host.Capture.CaptureDetails.AddMetaData("windowtitle", title);
+            Host.Accept(_hoverRect, _hoverWindow);
+            return true;
+        }
 
         /// <summary>
         /// Close the window with the selected rectangle

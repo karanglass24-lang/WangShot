@@ -34,7 +34,7 @@ namespace Greenshot.Helpers
         /// </summary>
         internal const int MaxLength = 63;
 
-        private const string Fallback = "Greenshot";
+        private const string Fallback = "왕샷";
         private const char Ellipsis = '…';
         private static readonly Regex WhitespaceRegex = new Regex(@"\s+", RegexOptions.Compiled);
 

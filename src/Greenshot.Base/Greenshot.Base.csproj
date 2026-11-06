@@ -40,6 +40,7 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Greenshot" />
+    <InternalsVisibleTo Include="WangShot" />
   </ItemGroup>
   <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">

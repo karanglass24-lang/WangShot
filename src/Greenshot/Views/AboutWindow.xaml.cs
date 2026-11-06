@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
  *
@@ -120,7 +120,7 @@ namespace Greenshot.Views
             var version = EnvironmentInfo.GetGreenshotVersion();
             var versionWithBuild = EnvironmentInfo.GetGreenshotVersion(true);
 
-            AppVersionTitle = $"{GreenshotEdition.ProductName} {version}";
+            AppVersionTitle = $"왕샷 1.0 · Greenshot {version} 기반";
             BitnessText = $"{OsInfo.Bits}-bit";
 
             WebsiteUrl = $"https://getgreenshot.org/?version={versionWithBuild}";

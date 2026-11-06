@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
  * 
@@ -60,7 +60,8 @@ namespace Greenshot.Base.Wpf
             {
                 var coreConfig = IniConfigRegistry.GetSection<ICoreConfiguration>();
                 int size = coreConfig?.IconSize.Width ?? 16;
-                return size > 0 ? size : 16;
+                // 왕샷: the menus keep compact icons, the editor toolbars use the full icon size
+                return size > 0 ? Math.Min(size, 20) : 16;
             }
         }
 
@@ -178,9 +179,10 @@ namespace Greenshot.Base.Wpf
         /// <param name="text">The text</param>
         /// <param name="isChecked">The current state</param>
         /// <param name="onChanged">Called with the new state when the user clicks the item</param>
-        public static MenuItem CreateCheckItem(string text, bool isChecked, Action<bool> onChanged)
+        /// <param name="icon">The icon or null</param>
+        public static MenuItem CreateCheckItem(string text, bool isChecked, Action<bool> onChanged, ImageSource icon = null)
         {
-            var item = CreateItem(text);
+            var item = CreateItem(text, icon);
             item.IsCheckable = true;
             item.IsChecked = isChecked;
             item.Click += (sender, args) =>
@@ -297,7 +299,24 @@ namespace Greenshot.Base.Wpf
             }
 
             menu.PlacementTarget = null;
-            menu.Placement = PlacementMode.MousePoint;
+            // MousePoint uses the position WPF last saw: for a click on the tray icon (another process) that is (0,0),
+            // the menu then sits in the top left corner of the screen. The real cursor position is used instead.
+            // The offsets are device independent units of the system DPI, WPF keeps the menu inside the screen.
+            if (GetCursorPos(out var cursor))
+            {
+                double scale = GetDpiForSystem() / 96.0;
+                if (scale <= 0)
+                {
+                    scale = 1;
+                }
+                menu.Placement = PlacementMode.AbsolutePoint;
+                menu.HorizontalOffset = cursor.X / scale;
+                menu.VerticalOffset = cursor.Y / scale;
+            }
+            else
+            {
+                menu.Placement = PlacementMode.MousePoint;
+            }
             menu.IsOpen = true;
 
             // A menu of a process without a foreground window wouldn't get the keyboard and wouldn't close on a click elsewhere.
@@ -310,6 +329,20 @@ namespace Greenshot.Base.Wpf
 
             menu.Focus();
         }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct CursorPoint
+        {
+            public int X;
+            public int Y;
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool GetCursorPos(out CursorPoint point);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern uint GetDpiForSystem();
 
         private static bool IsForegroundWindowOfThisProcess()
         {

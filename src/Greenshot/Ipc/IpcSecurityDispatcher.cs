@@ -66,6 +66,7 @@ namespace Greenshot.Ipc
         {
             "CLI",
             "OPEN_FILE",
+            "OPEN_EDITOR",
             "EXIT",
             "RELOAD_CONFIG",
             "FIRST_LAUNCH",
@@ -456,6 +457,15 @@ namespace Greenshot.Ipc
 
                 case "INSTALL_RECIPE":
                     await HandleInstallRecipeAsync(context).ConfigureAwait(false);
+                    break;
+
+                case "OPEN_EDITOR":
+                    InvokeOnUi(shell, Greenshot.Shell.TrayActions.OpenEmptyEditor);
+                    try
+                    {
+                        await context.ReplyAsync(new { status = "ok", exit_code = 0, stdout = "Editor opened." }).ConfigureAwait(false);
+                    }
+                    catch { }
                     break;
 
                 case "EXIT":

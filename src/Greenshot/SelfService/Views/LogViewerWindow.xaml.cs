@@ -223,7 +223,7 @@ namespace Greenshot.SelfService.Views
 
             try
             {
-                var iconUri = new Uri("pack://application:,,,/Greenshot;component/icons/applicationIcon/icon.ico", UriKind.RelativeOrAbsolute);
+                var iconUri = new Uri("pack://application:,,,/WangShot;component/icons/applicationIcon/icon.ico", UriKind.RelativeOrAbsolute);
                 Icon = BitmapFrame.Create(iconUri);
             }
             catch

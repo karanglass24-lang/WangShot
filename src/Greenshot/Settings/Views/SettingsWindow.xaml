@@ -742,7 +742,7 @@
             </TabItem>
             
             <!-- Printer Tab -->
-            <TabItem Header="{wpf:Text Settings.Printer}">
+            <TabItem Header="{wpf:Text Settings.Printer}" Visibility="Collapsed">
                 <ScrollViewer Style="{DynamicResource ThemedScrollViewer}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel>
                         <GroupBox Header="{wpf:Text Settings.Printoptions}">
@@ -1007,7 +1007,7 @@
                      Visibility="{Binding CoreConfiguration.IsBetaTester, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
             <!-- Plugin Tab -->
-            <TabItem x:Name="PluginsTabItem" Header="{wpf:Text Settings.Plugins}"/>
+            <TabItem x:Name="PluginsTabItem" Header="{wpf:Text Settings.Plugins}" Visibility="Collapsed"/>
             
             <!-- Expert Tab -->
             <TabItem x:Name="ExpertTabItem" Header="{wpf:Text Core.Expertsettings}" Visibility="{Binding IsExpertTabVisible, Converter={StaticResource ExpertVisibilityConverter}}">

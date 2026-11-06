@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
  *
@@ -474,6 +474,8 @@ namespace Greenshot.Editor.Forms
             IconBinder.Bind(btnSave, IconSource.FromResource(typeof(ImageEditorForm), "btnSave.Image"));
             IconBinder.Bind(btnClipboard, IconSource.FromResource(typeof(ImageEditorForm), "btnClipboard.Image"));
             IconBinder.Bind(btnPrint, IconSource.FromResource(typeof(ImageEditorForm), "btnPrint.Image"));
+            // 왕샷 has no printing
+            btnPrint.Visible = false;
             IconBinder.Bind(btnDelete, IconSource.FromResource(typeof(ImageEditorForm), "btnDelete.Image"));
             IconBinder.Bind(btnCut, IconSource.FromResource(typeof(ImageEditorForm), "btnCut.Image"));
             IconBinder.Bind(btnCopy, IconSource.FromResource(typeof(ImageEditorForm), "btnCopy.Image"));
@@ -539,6 +541,10 @@ namespace Greenshot.Editor.Forms
             // The InitializeComponent() call is required for Windows Forms designer support.
             //
             InitializeComponent();
+            // 왕샷: a drawing tool also works on the area around the image, the canvas grows when the element is finished
+            panel1.MouseDown += CanvasSurroundMouseDown;
+            panel1.MouseMove += CanvasSurroundMouseMove;
+            panel1.MouseUp += CanvasSurroundMouseUp;
             ApplyImages();
             EventHandler themeChangedHandler = (s, e) =>
             {
@@ -2025,10 +2031,54 @@ namespace Greenshot.Editor.Forms
             CutToolStripMenuItemClick(sender, e);
         }
 
+        private bool _surroundDrawing;
+
+        private MouseEventArgs ToSurfaceMouse(MouseEventArgs e) => new MouseEventArgs(e.Button, e.Clicks, e.X - _surface.Left, e.Y - _surface.Top, e.Delta);
+
+        private void CanvasSurroundMouseDown(object sender, MouseEventArgs e)
+        {
+            if (_surface == null || e.Button != MouseButtons.Left || _surface.DrawingMode == DrawingModes.None)
+            {
+                return;
+            }
+
+            _surroundDrawing = true;
+            _surface.ForwardMouseDown(ToSurfaceMouse(e));
+        }
+
+        private void CanvasSurroundMouseMove(object sender, MouseEventArgs e)
+        {
+            if (_surroundDrawing && _surface != null)
+            {
+                _surface.ForwardMouseMove(ToSurfaceMouse(e));
+            }
+        }
+
+        private void CanvasSurroundMouseUp(object sender, MouseEventArgs e)
+        {
+            if (!_surroundDrawing)
+            {
+                return;
+            }
+
+            _surroundDrawing = false;
+            _surface?.ForwardMouseUp(ToSurfaceMouse(e));
+        }
+
         private void CopyToolStripMenuItemClick(object sender, EventArgs e)
         {
-            _surface.CopySelectedElements();
-            UpdateClipboardSurfaceDependencies();
+            // Ctrl+C copies the whole image, with its annotations, as a picture other programs (Paint, Word, a browser) can paste.
+            // The selected objects only go to the clipboard in Greenshot's own format, which no other program reads: Ctrl+Shift+C
+            BtnClipboardClick(sender, e);
+        }
+
+        private void CopySelectedObjectsToClipboard()
+        {
+            if (_surface.HasSelectedElements)
+            {
+                _surface.CopySelectedElements();
+                UpdateClipboardSurfaceDependencies();
+            }
         }
 
         private void BtnCopyClick(object sender, EventArgs e)
@@ -2206,6 +2256,11 @@ namespace Greenshot.Editor.Forms
                         BtnResizeClick(sender, e);
                         break;
                 }
+            }
+            else if (e.Modifiers.Equals(Keys.Control | Keys.Shift) && e.KeyCode == Keys.C)
+            {
+                // Copy the selected objects, to paste them into the editor with Ctrl+V
+                CopySelectedObjectsToClipboard();
             }
             else if (e.Modifiers.Equals(Keys.Control))
             {
@@ -2589,12 +2644,13 @@ namespace Greenshot.Editor.Forms
 
             // buttons
             btnCut.Enabled = actionAllowedForSelection;
-            btnCopy.Enabled = actionAllowedForSelection;
+            // Copy also works without a selection: it copies the whole image
+            btnCopy.Enabled = !_controlsDisabledDueToConfirmable;
             btnDelete.Enabled = actionAllowedForSelection;
 
             // menus
             removeObjectToolStripMenuItem.Enabled = actionAllowedForSelection;
-            copyToolStripMenuItem.Enabled = actionAllowedForSelection;
+            copyToolStripMenuItem.Enabled = !_controlsDisabledDueToConfirmable;
             cutToolStripMenuItem.Enabled = actionAllowedForSelection;
             duplicateToolStripMenuItem.Enabled = actionAllowedForSelection;
 
@@ -2695,6 +2751,8 @@ namespace Greenshot.Editor.Forms
         /// </summary>
         private void BindFieldControls()
         {
+            CreateStepShapeButton();
+            CreateEmojiPresetButton();
             Bind(btnFillColor, "SelectedColor", _surface.FieldAggregator.GetField(FieldType.FILL_COLOR), "Value", NotNullValidator.GetInstance());
             Bind(btnLineColor, "SelectedColor", _surface.FieldAggregator.GetField(FieldType.LINE_COLOR), "Value", NotNullValidator.GetInstance());
             Bind(lineThicknessUpDown, "Value", _surface.FieldAggregator.GetField(FieldType.LINE_THICKNESS), "Value", DecimalIntConverter.GetInstance(),
@@ -2727,6 +2785,159 @@ namespace Greenshot.Editor.Forms
             Bind(arrowHeadsDropDownButton, "SelectedTag", _surface.FieldAggregator.GetField(FieldType.ARROWHEADS), "Value",
                 NotNullValidator.GetInstance());
             Bind(counterUpDown, "Value", _surface, "CounterStart", DecimalIntConverter.GetInstance(), NotNullValidator.GetInstance());
+            Bind(_stepShapeButton, "SelectedTag", _surface.FieldAggregator.GetField(FieldType.STEP_SHAPE), "Value", NotNullValidator.GetInstance());
+        }
+
+        private BindableToolStripDropDownButton _stepShapeButton;
+
+        private ToolStripDropDownButton _emojiPresetButton;
+        private ToolStripDropDown _emojiPresetDropDown;
+
+        // 왕샷: the emoji of the quick choice, in groups of eight
+        private static readonly string[] EmojiPresets =
+        {
+            "✅", "❌", "⭕", "❗", "❓", "⭐", "⚠", "💡",
+            "👍", "👎", "👉", "👆", "👇", "👈", "👏", "🙏",
+            "➡", "⬅", "⬆", "⬇", "🔴", "🟢", "🔵", "🟡",
+            "😀", "😎", "😢", "😡", "🤔", "😱", "🎉", "🔥",
+            "❤", "📌", "📎", "🔍", "🔒", "✏", "📝", "💬"
+        };
+
+        /// <summary>
+        /// 왕샷: a quick choice of emoji for the emoji tool, in the properties tool bar (also on a right click of the emoji tool)
+        /// </summary>
+        private void CreateEmojiPresetButton()
+        {
+            if (_emojiPresetButton != null)
+            {
+                return;
+            }
+
+            var emojiFont = new Font("Segoe UI Emoji", 15f);
+            var grid = new TableLayoutPanel { AutoSize = true, ColumnCount = 8, Padding = new Padding(4), BackColor = SystemColors.Window };
+            _emojiPresetButton = new ToolStripDropDownButton
+            {
+                Name = "emojiPresetButton",
+                DisplayStyle = ToolStripItemDisplayStyle.Image,
+                ImageScaling = ToolStripItemImageScaling.None,
+                ToolTipText = "이모지 선택",
+                Visible = false
+            };
+            ShowCurrentEmoji();
+            _emojiPresetDropDown = new ToolStripDropDown { Padding = Padding.Empty };
+            foreach (var emoji in EmojiPresets)
+            {
+                var button = new Button
+                {
+                    Image = EmojiRenderer.GetBitmap(emoji, 32),
+                    ImageAlign = ContentAlignment.MiddleCenter,
+                    Width = 44,
+                    Height = 40,
+                    Margin = new Padding(1),
+                    FlatStyle = FlatStyle.Flat,
+                    UseCompatibleTextRendering = false,
+                    Tag = emoji
+                };
+                button.FlatAppearance.BorderSize = 0;
+                button.Click += (sender, args) => ChooseEmoji((string)((Button)sender).Tag);
+                grid.Controls.Add(button);
+            }
+            _emojiPresetDropDown.Items.Add(new ToolStripControlHost(grid) { Padding = Padding.Empty, Margin = Padding.Empty });
+            _emojiPresetButton.DropDown = _emojiPresetDropDown;
+            propertiesToolStrip.Items.Add(_emojiPresetButton);
+            // The emoji tool of the left tool bar: a right click opens the same choice
+            btnEmoji.MouseUp += (sender, args) =>
+            {
+                if (args.Button == MouseButtons.Right)
+                {
+                    BtnEmojiClick(sender, EventArgs.Empty);
+                    _emojiPresetDropDown.Show(Cursor.Position);
+                }
+            };
+        }
+
+        private string _shownEmoji;
+
+        /// <summary>
+        /// The button of the emoji choice shows the emoji which the emoji tool draws
+        /// </summary>
+        private void ShowCurrentEmoji()
+        {
+            string emoji = EditorConfiguration.RecentEmoji;
+            if (string.IsNullOrEmpty(emoji) || emoji == _shownEmoji || _emojiPresetButton == null)
+            {
+                return;
+            }
+
+            var old = _emojiPresetButton.Image;
+            _emojiPresetButton.Image = EmojiRenderer.GetBitmap(emoji, 28);
+            old?.Dispose();
+            _shownEmoji = emoji;
+        }
+
+        private void ChooseEmoji(string emoji)
+        {
+            EditorConfiguration.RecentEmoji = emoji;
+            ShowCurrentEmoji();
+            _emojiPresetDropDown.Close();
+            // A selected emoji changes, and the emoji tool draws the chosen one
+            foreach (var element in _surface.SelectedElements.OfType<IEmojiContainer>())
+            {
+                element.Emoji = emoji;
+                element.Invalidate();
+            }
+
+            _surface.DrawingMode = DrawingModes.Emoji;
+            RefreshFieldControls();
+        }
+
+        /// <summary>
+        /// 왕샷: the shape of the numbered markers (step labels): a circle, a rectangle or a triangle. Made in code, next to the counter start.
+        /// </summary>
+        private void CreateStepShapeButton()
+        {
+            if (_stepShapeButton != null)
+            {
+                return;
+            }
+
+            static Bitmap ShapeIcon(StepLabelShape shape)
+            {
+                var bitmap = new Bitmap(28, 28);
+                using var graphics = Graphics.FromImage(bitmap);
+                graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                using var brush = new SolidBrush(Color.FromArgb(0xE5, 0x39, 0x35));
+                switch (shape)
+                {
+                    case StepLabelShape.Rectangle:
+                        graphics.FillRectangle(brush, 4, 4, 20, 20);
+                        break;
+                    case StepLabelShape.Triangle:
+                        graphics.FillPolygon(brush, new[] { new PointF(14, 3), new PointF(25, 24), new PointF(3, 24) });
+                        break;
+                    default:
+                        graphics.FillEllipse(brush, 3, 3, 22, 22);
+                        break;
+                }
+                return bitmap;
+            }
+
+            _stepShapeButton = new BindableToolStripDropDownButton
+            {
+                Name = "stepShapeButton",
+                DisplayStyle = ToolStripItemDisplayStyle.Image,
+                ToolTipText = "번호 모양",
+                ImageScaling = ToolStripItemImageScaling.None,
+                Visible = false
+            };
+            foreach (var (shape, text) in new[] { (StepLabelShape.Circle, "원"), (StepLabelShape.Rectangle, "사각형"), (StepLabelShape.Triangle, "삼각형") })
+            {
+                _stepShapeButton.DropDownItems.Add(new ToolStripMenuItem(text, ShapeIcon(shape)) { Tag = shape, ImageScaling = ToolStripItemImageScaling.None });
+            }
+            _stepShapeButton.Tag = StepLabelShape.Circle;
+            _stepShapeButton.Image = _stepShapeButton.DropDownItems[0].Image;
+            int index = propertiesToolStrip.Items.IndexOf(counterUpDown);
+            propertiesToolStrip.Items.Insert(index >= 0 ? index + 1 : propertiesToolStrip.Items.Count, _stepShapeButton);
         }
 
         private void Bind(INotifyPropertyChanged control, string controlPropertyName, INotifyPropertyChanged field, string fieldPropertyName,
@@ -2781,6 +2992,19 @@ namespace Greenshot.Editor.Forms
                 textHorizontalAlignmentButton.Visible = props.HasFieldValue(FieldType.TEXT_HORIZONTAL_ALIGNMENT);
                 textVerticalAlignmentButton.Visible = props.HasFieldValue(FieldType.TEXT_VERTICAL_ALIGNMENT);
                 shadowButton.Visible = props.HasFieldValue(FieldType.SHADOW);
+                if (_emojiPresetButton != null)
+                {
+                    _emojiPresetButton.Visible = _surface.DrawingMode == DrawingModes.Emoji || _surface.SelectedElements.OfType<IEmojiContainer>().Any();
+                    ShowCurrentEmoji();
+                }
+                if (_stepShapeButton != null)
+                {
+                    _stepShapeButton.Visible = props.HasFieldValue(FieldType.STEP_SHAPE);
+                    if (props.HasFieldValue(FieldType.STEP_SHAPE))
+                    {
+                        _stepShapeButton.SelectedTag = props.GetFieldValue(FieldType.STEP_SHAPE);
+                    }
+                }
                 counterLabel.Visible = counterUpDown.Visible = props.HasFieldValue(FieldType.FLAGS) && ((FieldFlag)props.GetFieldValue(FieldType.FLAGS)).HasFlag(FieldFlag.COUNTER);
 
                 btnConfirm.Visible = btnCancel.Visible = props.HasFieldValue(FieldType.FLAGS) && ((FieldFlag)props.GetFieldValue(FieldType.FLAGS)).HasFlag(FieldFlag.CONFIRMABLE);
