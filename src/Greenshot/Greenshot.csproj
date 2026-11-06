@@ -1,7 +1,11 @@
-<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
   <PropertyGroup>
     <RootNamespace>Greenshot</RootNamespace>
     <AssemblyName>WangShot</AssemblyName>
+    <Product>왕샷</Product>
+    <AssemblyTitle>왕샷</AssemblyTitle>
+    <Company>karanglass24-lang</Company>
+    <Description>왕샷 - 교재 집필용 스크린샷 프로그램</Description>
     <OutputType>WinExe</OutputType>
     <ApplicationIcon>icons\applicationIcon\icon.ico</ApplicationIcon>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
@@ -102,6 +106,7 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <Resource Include="icons\applicationIcon\icon.ico" />
+    <Resource Include="icons\applicationIcon\wangshot-logo.png" />
   </ItemGroup>
 
   <ItemGroup>

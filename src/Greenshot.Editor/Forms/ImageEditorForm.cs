@@ -317,6 +317,7 @@ namespace Greenshot.Editor.Forms
                 pixelSize = IconBinder.ApplyForDpi(toolStrip, dpi, "the editor");
             }
 
+            ApplyRibbonDpi(dpi);
             propertiesToolStrip.MinimumSize = new Size(150, pixelSize + 10);
             if (pixelSize != _emojiButtonSize)
             {
@@ -383,6 +384,10 @@ namespace Greenshot.Editor.Forms
             var theme = EditorTheme.Current;
             BackColor = theme.Background;
             ForeColor = theme.Foreground;
+            _ribbon?.ApplyTheme(theme);
+            ApplyRulerTheme();
+            _rulerTop?.Invalidate();
+            _rulerLeft?.Invalidate();
             foreach (Control control in new Control[]
                      {
                          topToolStripContainer.TopToolStripPanel, topToolStripContainer.LeftToolStripPanel, topToolStripContainer.BottomToolStripPanel,
@@ -572,10 +577,13 @@ namespace Greenshot.Editor.Forms
             timing.Mark("InitializeComponent");
             InitializeLanguage();
             timing.Mark("InitializeLanguage");
+            // 왕샷: the ribbon takes the buttons of the tool bars, after their texts were set
+            BuildRibbon();
             // Add the destinations after the form is loaded, this is needed for the dynamic destinations which need the handle of the form
             Load += (s, eventArgs) =>
             {
                 AddDestinations();
+                MoveDestinationButtonsIntoRibbon();
                 UpdateRecipesMenu();
             };
 
@@ -707,6 +715,7 @@ namespace Greenshot.Editor.Forms
             // Rendered in the size of the icons, the tool strip mustn't scale it
             btnEmoji.ImageScaling = ToolStripItemImageScaling.None;
             btnEmoji.Image = image;
+            _emojiTool?.SyncImage();
         }
 
         private int _emojiButtonSize;
@@ -1434,7 +1443,7 @@ namespace Greenshot.Editor.Forms
         /// </summary>
         private void UpdateDestinationButtons()
         {
-            foreach (ToolStripItem item in destinationsToolStrip.Items)
+            foreach (ToolStripItem item in DestinationButtons())
             {
                 if (item.Tag is IDestination destination)
                 {
@@ -1928,6 +1937,7 @@ namespace Greenshot.Editor.Forms
 
         private void BtnCropClick(object sender, EventArgs e)
         {
+            _surface.AreaSelectMode = false;
             if (_surface.DrawingMode == DrawingModes.Crop) return;
 
             _surface.DrawingMode = DrawingModes.Crop;
@@ -2067,6 +2077,13 @@ namespace Greenshot.Editor.Forms
 
         private void CopyToolStripMenuItemClick(object sender, EventArgs e)
         {
+            // A selected part of the image (area select) is copied alone
+            if (_surface.TryGetAreaSelection(out _))
+            {
+                CopyAreaSelection();
+                return;
+            }
+
             // Ctrl+C copies the whole image, with its annotations, as a picture other programs (Paint, Word, a browser) can paste.
             // The selected objects only go to the clipboard in Greenshot's own format, which no other program reads: Ctrl+Shift+C
             BtnClipboardClick(sender, e);
@@ -2365,7 +2382,7 @@ namespace Greenshot.Editor.Forms
         /// The menu, a tool bar or the tabs have the focus, they use the arrow keys, Enter and so on themselves
         /// </summary>
         private bool ToolBarsHaveFocus => menuStrip1.ContainsFocus || toolsToolStrip.ContainsFocus || propertiesToolStrip.ContainsFocus
-                                          || destinationsToolStrip.ContainsFocus || tabStrip.ContainsFocus;
+                                          || destinationsToolStrip.ContainsFocus || tabStrip.ContainsFocus || (_ribbon != null && _ribbon.ContainsFocus);
 
         /// <summary>
         /// The single keys (the letters of the tools, the arrows, Enter, Esc...) go to the canvas, unless the focus is in a text field,
@@ -2992,9 +3009,15 @@ namespace Greenshot.Editor.Forms
                 textHorizontalAlignmentButton.Visible = props.HasFieldValue(FieldType.TEXT_HORIZONTAL_ALIGNMENT);
                 textVerticalAlignmentButton.Visible = props.HasFieldValue(FieldType.TEXT_VERTICAL_ALIGNMENT);
                 shadowButton.Visible = props.HasFieldValue(FieldType.SHADOW);
+                bool areaSelect = _surface.AreaSelectMode && _surface.DrawingMode == DrawingModes.Crop;
+                if (_areaCopyButton != null)
+                {
+                    _areaCopyButton.Visible = _areaCropButton.Visible = _areaClearButton.Visible = areaSelect;
+                }
+
                 if (_emojiPresetButton != null)
                 {
-                    _emojiPresetButton.Visible = _surface.DrawingMode == DrawingModes.Emoji || _surface.SelectedElements.OfType<IEmojiContainer>().Any();
+                    _emojiPresetButton.Visible = false;
                     ShowCurrentEmoji();
                 }
                 if (_stepShapeButton != null)
@@ -3015,7 +3038,7 @@ namespace Greenshot.Editor.Forms
                 var cropMode = cropping ? (CropContainer.CropModes)props.GetFieldValue(FieldType.CROPMODE) : CropContainer.CropModes.Default;
                 foreach (var cropModeButton in new[] { btnCropDefault, btnCropVertical, btnCropHorizontal, btnCropAuto })
                 {
-                    cropModeButton.Visible = cropping;
+                    cropModeButton.Visible = cropping && !(_surface.AreaSelectMode && _surface.DrawingMode == DrawingModes.Crop);
                     cropModeButton.Checked = cropping && Equals(cropModeButton.Tag, cropMode);
                 }
 

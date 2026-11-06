@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
  *
@@ -289,7 +289,7 @@ namespace Greenshot.Base.Core
         bool AskForUnsignedPlugins { get; set; }
 
         [Description("How many days between every update check? (0=no checks)")]
-        [DefaultValue(14)]
+        [DefaultValue(1)]
         [Range(0, int.MaxValue, ErrorMessage = "UpdateCheckInterval must be non-negative.")]
         int UpdateCheckInterval { get; set; }
 

@@ -1,8 +1,8 @@
-; 왕샷 설치 프로그램 (Inno Setup 6)
+﻿; 왕샷 설치 프로그램 (Inno Setup 6)
 ;   ISCC.exe installer\wangshot.iss
 ; 먼저 빌드: dotnet build src\Greenshot\Greenshot.csproj -c Release
 #define AppName "왕샷"
-#define AppVersion "1.0.0"
+#define AppVersion "1.1.0"
 #define AppExe "WangShot.exe"
 #define BuildDir "..\src\Greenshot\bin\Release\net480"
 
@@ -58,6 +58,14 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+; 자동 업데이트(/SILENT /relaunch=1)로 설치했을 때는 끝나고 왕샷을 다시 실행해요
+Filename: "{app}\{#AppExe}"; Flags: nowait runasoriginaluser; Check: ShouldRelaunch
 
 [UninstallRun]
 Filename: "{app}\{#AppExe}"; Parameters: "--exit"; Flags: runhidden skipifdoesntexist; RunOnceId: "ExitWangShot"
+
+[Code]
+function ShouldRelaunch: Boolean;
+begin
+  Result := ExpandConstant('{param:relaunch|0}') = '1';
+end;

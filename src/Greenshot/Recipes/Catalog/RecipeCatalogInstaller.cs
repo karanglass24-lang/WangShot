@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
  *
@@ -370,7 +370,7 @@ namespace Greenshot.Recipes.Catalog
             }
             if (string.IsNullOrEmpty(configDirectory))
             {
-                configDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Greenshot");
+                configDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WangShot");
             }
             return Path.Combine(configDirectory, "Recipes", "Catalog");
         }

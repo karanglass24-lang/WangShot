@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
  * 
@@ -45,9 +45,9 @@ namespace Greenshot.Base.Core
         public static string ConfigLocation => Dapplo.Ini.IniConfigRegistry.Get()?.LoadedFromPath ?? string.Empty;
 
         /// <summary>
-        /// The directory for the files Greenshot keeps on this computer: %LocalAppData%\Greenshot
+        /// The directory for the files Greenshot keeps on this computer: %LocalAppData%\WangShot
         /// </summary>
-        public static string LocalDataDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Greenshot");
+        public static string LocalDataDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WangShot");
 
         /// <summary>
         /// True for the PortableApp and the .zip (greenshot.ini next to Greenshot.exe), these leave nothing on the system

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
  *
@@ -239,7 +239,7 @@ namespace Greenshot.Views
 
                 var dataPackage = request.Data;
                 dataPackage.Properties.Title = _title ?? "Share a screenshot";
-                dataPackage.Properties.ApplicationName = "Greenshot";
+                dataPackage.Properties.ApplicationName = "왕샷";
                 dataPackage.Properties.Thumbnail = imageRandomAccessStreamReference;
                 dataPackage.Properties.LogoBackgroundColor = Color.FromArgb(0xff, 0x3d, 0x3d, 0x3d);
 

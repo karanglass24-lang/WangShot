@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
  * 
@@ -41,7 +41,7 @@ namespace Greenshot.Base.Core
         /// <summary>
         /// Normal production INI file name.
         /// </summary>
-        public const string NormalConfigName = "greenshot.ini";
+        public const string NormalConfigName = "wangshot.ini";
 
         /// <summary>
         /// Design-time / test fallback INI file name. Distinct from <see cref="NormalConfigName"/>

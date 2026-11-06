@@ -167,6 +167,9 @@ namespace Greenshot.Shell
             var captureWindow = AddItem(menu, Texts.Core.ContextmenuCapturewindow, "contextmenu_capturewindow.Image", () => CaptureHelper.CaptureWindowInteractive(false));
             captureWindow.InputGestureText = HotkeyText(conf.WindowHotkey);
 
+            // 왕샷: a screenshot of a whole page (the window under the mouse is scrolled)
+            AddItem(menu, "스크롤 캡처 (마우스 아래 창)", null, () => Greenshot.Capturing.ScrollCapture.RunAsync().FireAndLog("Scroll capture", Log));
+
             menu.Items.Add(CreateFullscreenItem(conf));
             // The mouse cursor in the capture: on or off right here
             menu.Items.Add(ThemedMenu.CreateCheckItem(Texts.Settings.CaptureMousepointer, conf.CaptureMousepointer, value => conf.CaptureMousepointer = value, GetIcon("contextmenu_mousepointer.Image")));
@@ -200,12 +203,7 @@ namespace Greenshot.Shell
             AddItem(menu, "편집기 열기", "contextmenu_openeditor.Image", TrayActions.OpenEmptyEditor);
             menu.Items.Add(ThemedMenu.CreateSeparator());
 
-            AddItem(menu, Texts.Core.ContextmenuOpenrecentcapture, null, TrayActions.OpenLastCaptureLocation);
-
-            // 교재 집필용: 저장 폴더와 파일 이름 접두어(장·절)를 바로 정한다
-            AddItem(menu, "저장 폴더 지정...", null, ChooseOutputFolder);
-            string prefixNow = string.IsNullOrEmpty(conf.OutputFilePrefix) ? "없음" : conf.OutputFilePrefix;
-            AddItem(menu, $"파일 접두어 (장·절): {prefixNow}", null, ChooseFilePrefix);
+            // The save folder and the file prefix are in the settings (output page)
             menu.Items.Add(ThemedMenu.CreateSeparator());
 
             // The entries of the plugins, with their own separator
@@ -244,12 +242,10 @@ namespace Greenshot.Shell
                 menu.Items.Add(ThemedMenu.CreateSeparator());
             }
 
-            menu.Items.Add(ThemedMenu.CreateItem(Texts.Core.ContextmenuHelp, GetIcon("contextmenu_help.Image"), () => AsyncCommand.Run(HelpFileLoader.LoadHelpAsync, "Load the help")));
-
             var now = DateTime.Now;
             bool showPresent = (now.Month == 12 && now.Day > 19 && now.Day < 27) || // christmas
                                (now.Month == 3 && now.Day > 13 && now.Day < 21); // birthday
-            AddItem(menu, Texts.Core.ContextmenuAbout, null, () => _shell.ShowAbout());
+            AddItem(menu, "왕샷", null, () => _shell.ShowAbout());
             menu.Items.Add(ThemedMenu.CreateSeparator());
 
             AddItem(menu, Texts.Core.ContextmenuExit, "contextmenu_exit.Image", () => _shell.Exit());

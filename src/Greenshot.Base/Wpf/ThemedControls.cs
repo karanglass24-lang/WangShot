@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
  *
@@ -36,7 +36,7 @@ namespace Greenshot.Base.Wpf
         /// </summary>
         public static void ApplyDialogLook(Window window, string title)
         {
-            window.Title = title ?? "Greenshot";
+            window.Title = title ?? "왕샷";
             window.WindowStyle = WindowStyle.None;
             window.ResizeMode = ResizeMode.NoResize;
             window.SizeToContent = SizeToContent.WidthAndHeight;
@@ -55,7 +55,7 @@ namespace Greenshot.Base.Wpf
         {
             var header = new TextBlock
             {
-                Text = text ?? "Greenshot",
+                Text = text ?? "왕샷",
                 FontWeight = FontWeights.SemiBold,
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = WpfThemeHelper.TextPrimary,

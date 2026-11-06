@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2021 Thomas Braun, Jens Klingen, Robin Krom
  * 
@@ -32,6 +32,7 @@ using Greenshot.Base;
 using Greenshot.Base.Core;
 using Greenshot.Base.Interfaces;
 using Greenshot.Base.Wpf;
+using Greenshot.Base.Threading;
 using Greenshot.Capturing.Tools;
 using Greenshot.Helpers;
 using Greenshot.Base.Languages;
@@ -61,6 +62,12 @@ namespace Greenshot.Settings.Views
             
             _viewModel = new SettingsViewModel();
             DataContext = _viewModel;
+            Loaded += (s, e) =>
+            {
+                _syncingUpdate = true;
+                AutoUpdateCheckBox.IsChecked = _viewModel.CoreConfiguration.UpdateCheckInterval != 0;
+                _syncingUpdate = false;
+            };
             Icon = _viewModel.WindowIcon;
             
             // Apply theme
@@ -218,6 +225,35 @@ namespace Greenshot.Settings.Views
             {
                 Log.Warn("Failed to clamp window to working area", ex);
             }
+        }
+
+        private bool _syncingUpdate;
+
+        private void AutoUpdate_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_syncingUpdate || _viewModel == null)
+            {
+                return;
+            }
+
+            // 0 days = the check is off
+            var config = _viewModel.CoreConfiguration;
+            if (AutoUpdateCheckBox.IsChecked == true)
+            {
+                if (config.UpdateCheckInterval == 0)
+                {
+                    config.UpdateCheckInterval = 7;
+                }
+            }
+            else
+            {
+                config.UpdateCheckInterval = 0;
+            }
+        }
+
+        private void CheckUpdateNow_Click(object sender, RoutedEventArgs e)
+        {
+            new UpdateService().CheckNowAsync().FireAndLog("Check for updates", log4net.LogManager.GetLogger(typeof(SettingsWindow)));
         }
 
         private void OkButton_Click(object sender, RoutedEventArgs e)

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
  * 
@@ -31,7 +31,7 @@ namespace Greenshot.Ipc
     /// </summary>
     public static class NamedPipeEndpoint
     {
-        private const string PipePrefix = "Greenshot_";
+        private const string PipePrefix = "WangShot_";
 
         public static string GetUserSid()
         {

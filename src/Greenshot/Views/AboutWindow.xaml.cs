@@ -120,7 +120,7 @@ namespace Greenshot.Views
             var version = EnvironmentInfo.GetGreenshotVersion();
             var versionWithBuild = EnvironmentInfo.GetGreenshotVersion(true);
 
-            AppVersionTitle = $"왕샷 1.0 · Greenshot {version} 기반";
+            AppVersionTitle = $"왕샷 {WangShotInfo.Version} · Greenshot {version} 기반";
             BitnessText = $"{OsInfo.Bits}-bit";
 
             WebsiteUrl = $"https://getgreenshot.org/?version={versionWithBuild}";

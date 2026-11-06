@@ -46,7 +46,9 @@ namespace Greenshot.Base.Help
         /// </summary>
         public static async Task LoadHelpAsync()
         {
-            string uri = await FindOnlineHelpUrlAsync(Texts.Config.CurrentLanguage, CancellationToken.None).ConfigureAwait(false) ?? FindLocalHelpFile();
+            // 왕샷: the help is the page of 왕샷 on GitHub
+            await Task.CompletedTask.ConfigureAwait(false);
+            string uri = "https://github.com/karanglass24-lang/WangShot#readme";
             using (Process.Start(uri))
             {
                 // Only started

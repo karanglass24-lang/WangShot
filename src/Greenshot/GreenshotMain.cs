@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
  *
@@ -74,6 +74,29 @@ public class GreenshotMain
         return ayResult;
     }
 
+    /// <summary>
+    /// 왕샷: the first start takes the settings of a Greenshot on this PC (%APPDATA%\Greenshot\greenshot.ini) as its own, the old file stays
+    /// </summary>
+    private static void MigrateGreenshotSettings()
+    {
+        try
+        {
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            string oldFile = Path.Combine(appData, "Greenshot", "greenshot.ini");
+            string newDirectory = Path.Combine(appData, "WangShot");
+            string newFile = Path.Combine(newDirectory, "wangshot.ini");
+            if (File.Exists(oldFile) && !File.Exists(newFile))
+            {
+                Directory.CreateDirectory(newDirectory);
+                File.Copy(oldFile, newFile);
+            }
+        }
+        catch (Exception ex)
+        {
+            LOG.Warn("Could not take over the settings of Greenshot", ex);
+        }
+    }
+
     [STAThread]
     public static void Main(string[] args)
     {
@@ -123,16 +146,18 @@ public class GreenshotMain
         // Ensure any design-time / test fallback configuration is removed before production startup
         IniConfigHelper.UnregisterDesignTimeConfig();
 
-        var builder = IniConfigRegistry.ForFile("greenshot.ini")
+        MigrateGreenshotSettings();
 
-            .AddAppDataPath("Greenshot")
+        var builder = IniConfigRegistry.ForFile("wangshot.ini")
+
+            .AddAppDataPath("WangShot")
             .AddSearchPath(startupPath)
             // Ignored when not given, the directory is created when missing and greenshot-fixed.ini is never read from it.
             // An unusable directory is logged (IniListener.OnError) and the search paths are used instead.
             .SetOverrideDirectory(options.IniDirectory);
 
-        builder.AddDefaultsFile("greenshot-defaults.ini")
-               .AddConstantsFile("greenshot-fixed.ini")
+        builder.AddDefaultsFile("wangshot-defaults.ini")
+               .AddConstantsFile("wangshot-fixed.ini")
                .WithWriterOptions(new IniWriterOptions
                {
                    AssignmentSeparator = "=",
@@ -158,7 +183,7 @@ public class GreenshotMain
                .AutoSaveInterval(TimeSpan.FromSeconds(2))
                .EmptyWhenNull()
                .LockFile()
-               .EnableMetadata(applicationName: "Greenshot")
+               .EnableMetadata(applicationName: "WangShot")
                // Also logs errors of the background work (auto-save, save on exit), which are only reported to listeners
                .AddListener(new IniListener());
 

@@ -48,7 +48,7 @@ namespace Greenshot.Helpers
         /// </summary>
         internal const string StartupApprovedRun32Key = @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run32";
 
-        internal const string ValueName = "Greenshot";
+        internal const string ValueName = "WangShot";
 
         /// <summary>
         /// The Run value: the quoted path with --autostart, so a second start at the logon ends silently (see GreenshotApplication.Start).

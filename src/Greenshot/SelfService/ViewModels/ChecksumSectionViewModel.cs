@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
  * 
@@ -784,7 +784,7 @@ namespace Greenshot.SelfService.ViewModels
         {
             "readme.txt", "license.txt", "installer.txt",
             "bom.json", "bom.xml", "manifest.spdx.json", "manifest.spdx.json.sha256",
-            "log4net.xml", "greenshot.ini", "greenshot-defaults.ini", "greenshot-fixed.ini"
+            "log4net.xml", "wangshot.ini", "wangshot-defaults.ini", "wangshot-fixed.ini"
         };
 
         private static readonly Regex UninstallerFile = new Regex(@"^unins\d{3}\.(exe|dat|msg)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);

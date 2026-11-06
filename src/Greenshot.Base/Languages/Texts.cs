@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
  *
@@ -127,9 +127,9 @@ namespace Greenshot.Base.Languages
 
         private static LanguageConfig Load(string[] additionalSearchPaths)
         {
-            // The language setting only counts once greenshot.ini was read; before that (texts used very early) Windows decides
+            // The language setting only counts once wangshot.ini was read; before that (texts used very early) Windows decides
             ICoreConfiguration coreConfig = null;
-            if (IniConfigRegistry.TryGet("greenshot.ini", out var iniConfig))
+            if (IniConfigRegistry.TryGet(IniConfigHelper.NormalConfigName, out var iniConfig))
             {
                 coreConfig = iniConfig.IsLoaded ? iniConfig.GetSection<ICoreConfiguration>() : null;
             }

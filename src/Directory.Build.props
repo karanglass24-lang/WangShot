@@ -1,11 +1,11 @@
 ﻿<Project>
   <PropertyGroup>
-    <Copyright>Copyright © Greenshot 2007-2026</Copyright>
-    <Authors>Greenshot</Authors>
+    <Copyright>Copyright © 2026 karanglass24-lang. Based on Greenshot, Copyright © 2007-2026 Greenshot</Copyright>
+    <Authors>karanglass24-lang</Authors>
     <PackageIconUrl>https://getgreenshot.org/favicon.ico</PackageIconUrl>
-    <RepositoryUrl>https://github.com/greenshot/greenshot</RepositoryUrl>
+    <RepositoryUrl>https://github.com/karanglass24-lang/WangShot</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageProjectUrl>https://github.com/greenshot/greenshot</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/karanglass24-lang/WangShot</PackageProjectUrl>
     <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
     <LangVersion>latest</LangVersion>
     <UseWPF>true</UseWPF>

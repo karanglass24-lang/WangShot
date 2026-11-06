@@ -261,6 +261,41 @@ namespace Greenshot.Editor.Drawing
         [NonSerialized] private IDrawableContainer _cropContainer;
 
         /// <summary>
+        /// 왕샷: the crop rectangle only selects a part of the image (it can be copied) and isn't applied when the mouse is released
+        /// </summary>
+        public bool AreaSelectMode { get; set; }
+
+        /// <summary>
+        /// The selected part of the image (area select mode), false when nothing is selected
+        /// </summary>
+        public bool TryGetAreaSelection(out NativeRect area)
+        {
+            area = NativeRect.Empty;
+            if (!AreaSelectMode || DrawingMode != DrawingModes.Crop || _cropContainer == null || Image == null)
+            {
+                return false;
+            }
+
+            var bounds = _cropContainer.Bounds.Normalize().Intersect(new NativeRect(0, 0, Image.Width, Image.Height));
+            if (bounds.Width <= 0 || bounds.Height <= 0)
+            {
+                return false;
+            }
+
+            area = bounds;
+            return true;
+        }
+
+        /// <summary>
+        /// A copy of a part of the image with its elements, the caller disposes it
+        /// </summary>
+        public Image GetAreaImage(NativeRect area)
+        {
+            using var full = GetImageForExport();
+            return ImageHelper.CloneArea(full, area, PixelFormat.DontCare);
+        }
+
+        /// <summary>
         /// the brush which is used for transparent backgrounds, set by the editor, do not serialize
         /// </summary>
         [NonSerialized] private Brush _transparencyBackgroundBrush;
@@ -2727,7 +2762,7 @@ namespace Greenshot.Editor.Drawing
 
             // The crop rectangle of the plain crop mode is applied when the mouse is released, no extra confirmation (Ctrl+Z undoes it)
             bool drewCropRectangle = DrawingMode == DrawingModes.Crop && _cropContainer != null && ReferenceEquals(_drawingElement, _cropContainer)
-                                     && _cropContainer is CropContainer plainCrop
+                                     && !AreaSelectMode && _cropContainer is CropContainer plainCrop
                                      && plainCrop.GetFieldValue(FieldType.CROPMODE) is CropContainer.CropModes.Default;
 
             // A click without a drag only gets a default size in FinishDrawingElement: it must not crop

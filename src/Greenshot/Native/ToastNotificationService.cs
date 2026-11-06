@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
  *
@@ -160,7 +160,7 @@ namespace Greenshot.Plugin.Win10
         /// <summary>
         /// The app id of Greenshot, the same as the one of the start menu shortcut (see tasks-icons-reg.iss)
         /// </summary>
-        public const string AppId = "Greenshot";
+        public const string AppId = "WangShot";
 
         private static readonly ILog Log = LogManager.GetLogger(typeof(ToastNotificationService));
         private static readonly ICoreConfiguration CoreConfiguration = IniConfigRegistry.GetSection<ICoreConfiguration>();

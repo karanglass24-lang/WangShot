@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
  *
@@ -102,7 +102,7 @@ namespace Greenshot.Settings.Views
         {
             var dialog = new SaveFileDialog
             {
-                FileName = "greenshot-fixed.ini",
+                FileName = "wangshot-fixed.ini",
                 DefaultExt = ".ini",
                 Filter = "INI (*.ini)|*.ini"
             };

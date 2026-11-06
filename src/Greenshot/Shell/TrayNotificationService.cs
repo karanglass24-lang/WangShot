@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
  *
@@ -116,7 +116,7 @@ namespace Greenshot.Shell
             };
 
             // The tray icon is created after the services, a notification before it isn't shown
-            SimpleServiceProvider.Current.GetInstance<ITrayIcon>(isOptional: true)?.ShowBalloon("Greenshot", message, level, onClickAction, onClosedAction);
+            SimpleServiceProvider.Current.GetInstance<ITrayIcon>(isOptional: true)?.ShowBalloon("왕샷", message, level, onClickAction, onClosedAction);
         }
     }
 }

@@ -1,4 +1,4 @@
-// Greenshot - a free and open source screenshot tool
+﻿// Greenshot - a free and open source screenshot tool
 // Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
 //
 // For more information see: https://getgreenshot.org/
@@ -18,8 +18,15 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
+using System.Net;
+using System.Net.Http;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using System.Windows.Forms;
 using System.Threading;
 using System.Threading.Tasks;
 using Greenshot.Base.Core;
@@ -42,8 +49,8 @@ namespace Greenshot.Helpers
         private readonly object _lifecycleLock = new object();
         private static readonly ILog Log = LogManager.GetLogger(typeof(UpdateService));
         private static readonly ICoreConfiguration CoreConfig = IniConfigRegistry.GetSection<ICoreConfiguration>();
-        private static readonly Uri UpdateFeed = new Uri("https://getgreenshot.org/update-feed.json");
-        private static readonly Uri Downloads = new Uri("https://getgreenshot.org/downloads");
+        private static readonly Uri UpdateFeed = WangShotInfo.LatestReleaseApi;
+        private static readonly Uri Downloads = WangShotInfo.ReleasesPage;
         // The longest single wait of the background loop, Task.Delay throws above about 24.8 days
         private static readonly TimeSpan MaxWait = TimeSpan.FromDays(1);
         private CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
@@ -115,25 +122,8 @@ namespace Greenshot.Helpers
             }
             else
             {
-                try
-                {
-                    var location = GetType().Assembly.Location;
-                    if (!string.IsNullOrEmpty(location))
-                    {
-                        var version = FileVersionInfo.GetVersionInfo(location);
-                        CurrentVersion = new Version(version.FileMajorPart, version.FileMinorPart, version.FileBuildPart);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log.Warn("Could not determine current version from assembly file info", ex);
-                }
-
-                if (CurrentVersion == null)
-                {
-                    var ver = GetType().Assembly.GetName().Version;
-                    CurrentVersion = ver != null ? new Version(ver.Major, ver.Minor, Math.Max(0, ver.Build)) : new Version(1, 0, 0);
-                }
+                // 왕샷: the version of 왕샷 itself, not the one of Greenshot
+                CurrentVersion = WangShotInfo.CurrentVersion;
             }
         }
 
@@ -283,13 +273,14 @@ namespace Greenshot.Helpers
                     CoreConfig.LastUpdateCheck = DateTime.Now;
                 }
 
-                var updateFeed = await HttpService.Current.GetJsonAsync<UpdateFeed>(UpdateFeed, cancellationToken).ConfigureAwait(false);
-                if (updateFeed == null)
+                var release = await FetchLatestReleaseAsync(cancellationToken).ConfigureAwait(false);
+                if (release == null)
                 {
                     return false;
                 }
 
-                ProcessFeed(updateFeed);
+                ProcessRelease(release);
+                Log.InfoFormat("Latest release {0}, installed {1}, installer {2}", LatestReleaseVersion, CurrentVersion, _setupUrl);
             }
             catch (Exception ex)
             {
@@ -320,27 +311,172 @@ namespace Greenshot.Helpers
         /// <param name="newVersion">Version</param>
         private void ShowUpdate(Version newVersion)
         {
+            Log.InfoFormat("Asking about the update to {0}", newVersion);
+            PromptAndInstallAsync(newVersion).FireAndLog("Show the update", Log);
+        }
+
+        // ---- 왕샷: update from the releases of the GitHub repository ------------------------------------------------
+
+        private sealed class GitHubAsset
+        {
+            [JsonPropertyName("name")] public string Name { get; set; }
+
+            [JsonPropertyName("browser_download_url")] public string Url { get; set; }
+
+            [JsonPropertyName("size")] public long Size { get; set; }
+        }
+
+        private sealed class GitHubRelease
+        {
+            [JsonPropertyName("tag_name")] public string TagName { get; set; }
+
+            [JsonPropertyName("body")] public string Body { get; set; }
+
+            [JsonPropertyName("draft")] public bool Draft { get; set; }
+
+            [JsonPropertyName("prerelease")] public bool Prerelease { get; set; }
+
+            [JsonPropertyName("assets")] public List<GitHubAsset> Assets { get; set; }
+        }
+
+        private string _releaseNotes;
+        private Uri _setupUrl;
+
+        private static async Task<GitHubRelease> FetchLatestReleaseAsync(CancellationToken cancellationToken)
+        {
+            ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("WangShot-Updater");
+            client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
+            using var response = await client.GetAsync(UpdateFeed, cancellationToken).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+            string json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            return JsonSerializer.Deserialize<GitHubRelease>(json);
+        }
+
+        /// <summary>
+        /// The version, the notes and the installer of the newest release
+        /// </summary>
+        private void ProcessRelease(GitHubRelease release)
+        {
+            if (release.Draft || release.Prerelease || string.IsNullOrEmpty(release.TagName))
+            {
+                return;
+            }
+
+            if (!Version.TryParse(release.TagName.Trim().TrimStart('v', 'V'), out var version))
+            {
+                return;
+            }
+
+            LatestReleaseVersion = version;
+            _releaseNotes = release.Body;
+            _setupUrl = null;
+            foreach (var asset in release.Assets ?? new List<GitHubAsset>())
+            {
+                // Only the installer of 왕샷, from GitHub over https
+                if (asset.Name != null && Regex.IsMatch(asset.Name, @"^WangShot-[0-9.]+-setup\.exe$", RegexOptions.IgnoreCase)
+                    && Uri.TryCreate(asset.Url, UriKind.Absolute, out var url) && url.Scheme == Uri.UriSchemeHttps
+                    && url.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase))
+                {
+                    _setupUrl = url;
+                    break;
+                }
+            }
+        }
+
+        /// <summary>
+        /// True when this copy was installed with the setup (it has an uninstaller), a copy from a zip can't be updated by the setup
+        /// </summary>
+        private static bool IsInstalledCopy() => File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "unins000.exe"));
+
+        /// <summary>
+        /// Check for an update when the user asks for it, and tell the result
+        /// </summary>
+        public async Task CheckNowAsync()
+        {
+            bool ok = await CheckForUpdatesAsync(false).ConfigureAwait(false);
+            if (!ok)
+            {
+                await ShowMessageAsync("업데이트를 확인하지 못했어요. 인터넷 연결을 확인해 주세요.", MessageBoxIcon.Warning).ConfigureAwait(false);
+            }
+            else if (IsUpdateAvailable)
+            {
+                await PromptAndInstallAsync(LatestReleaseVersion).ConfigureAwait(false);
+            }
+            else
+            {
+                await ShowMessageAsync($"이미 최신 버전이에요. (왕샷 {CurrentVersion})", MessageBoxIcon.Information).ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>
+        /// The question or message of the update, in the style of 왕샷's windows, on top of the other windows
+        /// </summary>
+        /// <returns>the index of the clicked button, -1 when the dialog was closed</returns>
+        private static Task<int> ShowChoiceAsync(string text, MessageBoxIcon icon, params string[] buttons)
+        {
+            var image = icon == MessageBoxIcon.Warning ? System.Windows.MessageBoxImage.Warning : System.Windows.MessageBoxImage.Information;
+            return UiDispatcher.Current.InvokeAsync(() => Greenshot.Base.Wpf.ThemedMessageBox.ShowChoice(null, "왕샷 업데이트", text, image, buttons, defaultIndex: 0, cancelIndex: -1, onTop: true));
+        }
+
+        private static Task ShowMessageAsync(string text, MessageBoxIcon icon) => ShowChoiceAsync(text, icon, "확인");
+
+        /// <summary>
+        /// Ask whether to update, then download the installer and run it: it closes 왕샷, updates it and starts it again
+        /// </summary>
+        private async Task PromptAndInstallAsync(Version newVersion)
+        {
+            string notes = (_releaseNotes ?? string.Empty).Trim();
+            if (notes.Length > 600)
+            {
+                notes = notes.Substring(0, 600) + "…";
+            }
+
+            bool canInstall = _setupUrl != null && IsInstalledCopy();
+            string question = canInstall ? "지금 업데이트할까요?" : "다운로드 페이지를 열까요?";
+            int answer = await ShowChoiceAsync($"왕샷 {newVersion} 버전이 나왔어요. (현재 {CurrentVersion})\n\n{notes}\n\n{question}", MessageBoxIcon.Information, "예", "나중에").ConfigureAwait(false);
+            Log.InfoFormat("The answer to the update question: {0}", answer);
+            if (answer != 0)
+            {
+                return;
+            }
+
+            if (!canInstall)
+            {
+                Process.Start(new ProcessStartInfo(DownloadsUrl.AbsoluteUri) { UseShellExecute = true })?.Dispose();
+                return;
+            }
+
             try
             {
-                var notificationService = SimpleServiceProvider.Current?.GetInstance<INotificationService>(isOptional: true);
-                if (notificationService == null) return;
-
-                var message = string.Format(Texts.Core.UpdateFound, newVersion.ToString());
-                notificationService.ShowInfoMessage(message, TimeSpan.FromHours(1), () =>
+                string folder = Path.Combine(Path.GetTempPath(), "WangShot-update");
+                Directory.CreateDirectory(folder);
+                string setupPath = Path.Combine(folder, Path.GetFileName(_setupUrl.LocalPath));
+                using (var client = new HttpClient { Timeout = TimeSpan.FromMinutes(5) })
                 {
-                    try
-                    {
-                        Process.Start(new ProcessStartInfo(DownloadsUrl.AbsoluteUri) { UseShellExecute = true });
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error($"Failed to launch download URL: {DownloadsUrl.AbsoluteUri}", ex);
-                    }
-                });
+                    client.DefaultRequestHeaders.UserAgent.ParseAdd("WangShot-Updater");
+                    using var response = await client.GetAsync(_setupUrl, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
+                    response.EnsureSuccessStatusCode();
+                    using var file = File.Create(setupPath);
+                    await response.Content.CopyToAsync(file).ConfigureAwait(false);
+                }
+
+                if (new FileInfo(setupPath).Length < 1024 * 1024)
+                {
+                    throw new InvalidDataException("The downloaded installer is too small.");
+                }
+
+                Log.InfoFormat("Starting the installer {0}", setupPath);
+                Process.Start(new ProcessStartInfo(setupPath, "/SILENT /NORESTART /CLOSEAPPLICATIONS /relaunch=1") { UseShellExecute = true })?.Dispose();
+                // The installer closes 왕샷 too, this makes sure the files are free
+                SimpleServiceProvider.Current?.GetInstance<IGreenshotShell>(isOptional: true)?.Exit();
             }
             catch (Exception ex)
             {
-                Log.Warn("Could not display update notification.", ex);
+                Log.Warn("The update failed", ex);
+                await ShowMessageAsync("업데이트하지 못했어요. 다운로드 페이지에서 직접 받아 주세요.", MessageBoxIcon.Warning).ConfigureAwait(false);
+                Process.Start(new ProcessStartInfo(DownloadsUrl.AbsoluteUri) { UseShellExecute = true })?.Dispose();
             }
         }
 

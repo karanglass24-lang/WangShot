@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
  * 
@@ -66,7 +66,7 @@ namespace Greenshot.Shell
 
                 // Fix for Bug 2495900, Multi-user Environment
                 // check whether there's an local instance running already
-                _applicationMutex = ResourceMutex.Create("F48E86D3-E34C-4DB7-8F8F-9A0EA55F0D08", "Greenshot", false);
+                _applicationMutex = ResourceMutex.Create("5C0E7A3D-91B4-4F26-A8D5-3E7B6C1F9A42", "WangShot", false);
 
                 var isAlreadyRunning = !_applicationMutex.IsLocked;
 

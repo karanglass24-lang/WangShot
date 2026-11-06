@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026  Thomas Braun, Jens Klingen, Robin Krom
  *
@@ -49,7 +49,7 @@ namespace Greenshot.Helpers
         /// <summary>
         /// Directory where editor state is stored for restore after a system restart.
         /// </summary>
-        public static string StateDirectory => Path.Combine(Path.GetTempPath(), "Greenshot", "RestartState");
+        public static string StateDirectory => Path.Combine(Path.GetTempPath(), "WangShot", "RestartState");
 
         /// <summary>
         /// How long the end of the session waits for the editors to save their state

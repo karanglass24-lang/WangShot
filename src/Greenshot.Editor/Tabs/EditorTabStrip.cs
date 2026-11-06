@@ -509,7 +509,17 @@ namespace Greenshot.Editor.Tabs
 
         private void PaintTitle(Graphics graphics, Rectangle bounds, EditorTab tab, Color color)
         {
-            var textBounds = new Rectangle(bounds.Left + Scale(8), bounds.Top, Math.Max(0, bounds.Width - Scale(8)), bounds.Height);
+            // A small accent square before the name, like a tab of a document
+            int marker = Scale(8);
+            using (var markerBrush = new SolidBrush(EditorTheme.Current.Highlight))
+            {
+                var state = graphics.SmoothingMode;
+                graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                graphics.FillRectangle(markerBrush, bounds.Left + Scale(9), bounds.Top + (bounds.Height - marker) / 2 + Scale(1), marker, marker);
+                graphics.SmoothingMode = state;
+            }
+
+            var textBounds = new Rectangle(bounds.Left + Scale(22), bounds.Top, Math.Max(0, bounds.Width - Scale(22)), bounds.Height);
             TextRenderer.DrawText(graphics, tab.Title, Font, textBounds, color,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
         }

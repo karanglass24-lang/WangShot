@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
  * 
@@ -54,7 +54,7 @@ namespace Greenshot.Base.Core
         /// <summary>
         /// The product name with the edition, e.g. "Greenshot" or "Greenshot Light"
         /// </summary>
-        public static string ProductName => IsFull ? "Greenshot" : $"Greenshot {Name}";
+        public static string ProductName => IsFull ? "왕샷" : $"왕샷 {Name}";
 
         /// <summary>
         /// The edition for the version text in logs and reports: empty for the full edition, otherwise e.g. " Light"
