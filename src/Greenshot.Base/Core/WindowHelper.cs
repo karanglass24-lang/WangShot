@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
  *
@@ -86,9 +86,33 @@ namespace Greenshot.Base.Core
         {
             var screenBounds = DisplayInfo.ScreenBounds;
             return InteropWindowQuery.GetTopWindows()
-                .Where(window => !IsIgnored(window) && window.IsVisible() && !window.IsMinimized() && !window.CanIgnoreClass()
+                .Where(window => !IsIgnored(window) && window.IsVisible() && !window.IsMinimized() && !window.CanIgnoreClass() && !IsClickThroughOverlay(window)
                                  && !window.GetInfo().Bounds.Intersect(screenBounds).IsEmpty)
                 .ToList();
+        }
+
+        /// <summary>
+        /// 왕샷: windows of the system which cover the whole screen but can't be clicked (e.g. the handwriting canvas of Windows 11) aren't windows to snap to:
+        /// they would be taken for the window under the mouse and the whole screen would be selected
+        /// </summary>
+        private static bool IsClickThroughOverlay(IInteropWindow window)
+        {
+            try
+            {
+                if ((window.GetClassname() ?? string.Empty).StartsWith("ShellHandwritingCanvas", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                long style = Convert.ToInt64(window.GetInfo().ExtendedStyle);
+                // WS_EX_TRANSPARENT and WS_EX_LAYERED together: the mouse goes through the window
+                return (style & 0x20) != 0 && (style & 0x80000) != 0;
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("Couldn't read the style of a window", ex);
+                return false;
+            }
         }
 
         /// <summary>
