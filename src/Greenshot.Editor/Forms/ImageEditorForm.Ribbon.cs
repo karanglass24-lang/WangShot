@@ -7,6 +7,7 @@ using System.Windows.Forms;
 using Greenshot.Base;
 using Greenshot.Base.Controls;
 using Greenshot.Base.Core;
+using Greenshot.Base.Interfaces;
 using Greenshot.Editor.Controls;
 using Greenshot.Editor.Drawing;
 
@@ -80,7 +81,8 @@ namespace Greenshot.Editor.Forms
             penTool.SetMembers((btnFreehand, "연필"), (btnHighlight, "형광펜"));
             var tools = AddRibbonGroup(home, "도구",
                 (selectTool, "선택"), (shapeTool, null), (lineTool, null), (penTool, null),
-                (btnText, "글자"), (btnSpeechBubble, "말풍선"), (btnStepLabel, "번호"), (emojiTool, "이모지"), (btnObfuscate, "가리기"));
+                (btnText, "글자"), (btnSpeechBubble, "말풍선"), (btnStepLabel, "번호"), (emojiTool, "이모지"), (btnObfuscate, "가리기"),
+                (NewAction("스크롤 캡처", "마우스가 있는 창(웹 페이지 등)을 스크롤하며 한 장으로 캡처해요 (3초 뒤 시작, Esc로 멈춤)", "scrollCapture.Image", (s, e) => SimpleServiceProvider.Current.GetInstance<IGreenshotShell>().StartScrollCapture()), null));
             // Room under every tool for the chevron, so the names stand in one line
             foreach (ToolStripItem tool in tools.Items)
             {
@@ -97,9 +99,8 @@ namespace Greenshot.Editor.Forms
             // The colours: line colour, fill colour and a palette
             _palette = new ColorPaletteControl();
             _palette.ColorChosen += (color, fill) => _surface.FieldAggregator.GetField(fill ? Greenshot.Editor.Drawing.Fields.FieldType.FILL_COLOR : Greenshot.Editor.Drawing.Fields.FieldType.LINE_COLOR).Value = color;
-            _ribbon.AddControlGroup(home, "색상", _palette);
-            // The options of the tool or of the selected element (colour, thickness, font ...): shown only when there are some
-            _ribbon.AddStripGroup(home, "속성", propertiesToolStrip);
+            // The options of the tool or of the selected element (colour, thickness, font ...) are in the same group, shown only when there are some
+            _ribbon.AddPaletteGroup(home, "색상 · 속성", _palette, propertiesToolStrip);
 
             // ---- Edit
             AddRibbonGroup(edit, "실행", (Proxy(undoToolStripMenuItem, "되돌리기"), null), (Proxy(redoToolStripMenuItem, "다시실행"), null));

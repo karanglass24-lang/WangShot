@@ -22,8 +22,8 @@ namespace Greenshot.Capturing
     internal static class ScrollCapture
     {
         private static readonly ILog Log = LogManager.GetLogger(typeof(ScrollCapture));
-        private const int MaximumFrames = 80;
-        private const int MaximumHeight = 30000;
+        private const int MaximumFrames = 250;
+        private const int MaximumHeight = 60000;
         private static bool _running;
 
         [StructLayout(LayoutKind.Sequential)]
@@ -175,25 +175,59 @@ namespace Greenshot.Capturing
             return bitmap;
         }
 
-        private static bool Same(Bitmap a, Bitmap b)
+        private static unsafe bool Same(Bitmap a, Bitmap b)
         {
-            // Compared by a coarse sample: the scrolling of the page has stopped when two pictures in a row look the same
-            for (int y = 0; y < a.Height; y += Math.Max(1, a.Height / 40))
+            // The scrolling of the page has stopped when two pictures in a row are the same (compared in a dense grid)
+            var rect = new Rectangle(0, 0, a.Width, a.Height);
+            var dataA = a.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+            var dataB = b.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+            try
             {
-                for (int x = 0; x < a.Width; x += Math.Max(1, a.Width / 40))
+                for (int y = 0; y < a.Height; y += 3)
                 {
-                    var p = a.GetPixel(x, y);
-                    var q = b.GetPixel(x, y);
-                    if (Math.Abs(p.R - q.R) + Math.Abs(p.G - q.G) + Math.Abs(p.B - q.B) > 12)
+                    byte* rowA = (byte*)dataA.Scan0 + y * dataA.Stride;
+                    byte* rowB = (byte*)dataB.Scan0 + y * dataB.Stride;
+                    for (int x = 0; x < a.Width; x += 5)
                     {
-                        return false;
+                        int i = x * 3;
+                        if (Math.Abs(rowA[i] - rowB[i]) + Math.Abs(rowA[i + 1] - rowB[i + 1]) + Math.Abs(rowA[i + 2] - rowB[i + 2]) > 12)
+                        {
+                            return false;
+                        }
                     }
                 }
+            }
+            finally
+            {
+                a.UnlockBits(dataA);
+                b.UnlockBits(dataB);
             }
 
             return true;
         }
 
+        /// <summary>
+        /// The picture when the page stands still: two pictures in a row are the same
+        /// </summary>
+        private static async Task<Bitmap> GrabSettledAsync(Rectangle rect, int firstWait)
+        {
+            Bitmap current = null;
+            for (int attempt = 0; attempt < 16; attempt++)
+            {
+                await Task.Delay(attempt == 0 ? firstWait : 160).ConfigureAwait(false);
+                var next = Grab(rect);
+                if (current != null && Same(current, next))
+                {
+                    current.Dispose();
+                    return next;
+                }
+
+                current?.Dispose();
+                current = next;
+            }
+
+            return current;
+        }
         private static async Task<(Bitmap Result, int Frames, bool StoppedByUser)> CaptureAllAsync(Rectangle rect, POINT originalCursor)
         {
             var stitcher = new ScrollStitcher();
@@ -208,6 +242,7 @@ namespace Greenshot.Capturing
                     stitcher.Start(first);
                 }
 
+                int notches = 5;
                 while (stitcher.FrameCount < MaximumFrames && stitcher.TotalHeight < MaximumHeight)
                 {
                     if ((GetAsyncKeyState(0x1B) & 0x8000) != 0)
@@ -216,36 +251,31 @@ namespace Greenshot.Capturing
                         break;
                     }
 
-                    // Five notches of the wheel down
-                    mouse_event(0x0800 /* MOUSEEVENTF_WHEEL */, 0, 0, unchecked((uint)(-120 * 5)), UIntPtr.Zero);
-                    Bitmap current = null;
-                    for (int attempt = 0; attempt < 14; attempt++)
+                    mouse_event(0x0800 /* MOUSEEVENTF_WHEEL */, 0, 0, unchecked((uint)(-120 * notches)), UIntPtr.Zero);
+                    bool added = false;
+                    bool atEnd = false;
+                    // A picture which doesn't fit (the page was still moving, a picture was loaded) gets another try before it is the end
+                    for (int retry = 0; retry < 3 && !added && !atEnd; retry++)
                     {
-                        await Task.Delay(attempt == 0 ? 350 : 140).ConfigureAwait(false);
-                        var next = Grab(rect);
-                        if (current != null && Same(current, next))
-                        {
-                            current.Dispose();
-                            current = next;
-                            break;
-                        }
-
-                        current?.Dispose();
-                        current = next;
-                    }
-
-                    bool added;
-                    using (current)
-                    {
+                        using var current = await GrabSettledAsync(rect, retry == 0 ? 350 : 700).ConfigureAwait(false);
                         added = stitcher.TryAdd(current);
+                        if (!added)
+                        {
+                            atEnd = stitcher.LooksLikeLast(current);
+                        }
                     }
 
                     if (!added)
                     {
                         break;
                     }
-                }
 
+                    // The steps should be about 60 % of the picture: more notches when the page moves little, fewer when it moves a lot
+                    if (stitcher.LastMove > 0)
+                    {
+                        notches = Math.Max(1, Math.Min(10, (int)Math.Round(notches * 0.6 * stitcher.FrameHeight / stitcher.LastMove)));
+                    }
+                }
                 return (stitcher.Finish(), stitcher.FrameCount, stopped);
             }
             catch (Exception ex)

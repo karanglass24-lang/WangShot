@@ -20,6 +20,7 @@ namespace Greenshot.Capturing
         private int _height;
         private int _lastDy;
         private int _lastFooter;
+        private Bitmap _lastFooterImage;
         private bool _firstPairDone;
 
         /// <summary>
@@ -31,6 +32,41 @@ namespace Greenshot.Capturing
         /// The height of the page so far
         /// </summary>
         public int TotalHeight { get; private set; }
+
+        /// <summary>
+        /// How far the page moved at the last step
+        /// </summary>
+        public int LastMove => _lastDy;
+
+        /// <summary>
+        /// The height of the pictures
+        /// </summary>
+        public int FrameHeight => _height;
+
+        /// <summary>
+        /// True when the picture looks like the last one which was added (the page didn't move)
+        /// </summary>
+        public bool LooksLikeLast(Bitmap candidate)
+        {
+            if (_previousGray == null || candidate.Width != _width || candidate.Height != _height)
+            {
+                return false;
+            }
+
+            var gray = ToGray(candidate);
+            long sum = 0;
+            long count = 0;
+            for (int y = 0; y < _height; y += 3)
+            {
+                for (int x = 0; x < _width; x += 5)
+                {
+                    sum += Math.Abs(_previousGray[y * _width + x] - gray[y * _width + x]);
+                    count++;
+                }
+            }
+
+            return count > 0 && (double)sum / count < 0.6;
+        }
 
         /// <summary>
         /// The first picture, the top of the page
@@ -79,12 +115,14 @@ namespace Greenshot.Capturing
                 TotalHeight = _height - footer;
             }
 
-            var copy = (Bitmap)next.Clone();
             int from = Math.Max(0, _height - footer - dy);
             int to = _height - footer;
-            _segments.Add((copy, from, to));
+            // Only the new rows are kept (a long page would take too much memory otherwise)
+            var copy = next.Clone(new Rectangle(0, from, _width, to - from), PixelFormat.Format24bppRgb);
+            _segments.Add((copy, 0, to - from));
             TotalHeight += to - from;
-            _previous = copy;
+            _lastFooterImage?.Dispose();
+            _lastFooterImage = footer > 0 ? next.Clone(new Rectangle(0, _height - footer, _width, footer), PixelFormat.Format24bppRgb) : null;
             _previousGray = gray;
             _lastDy = dy;
             _lastFooter = footer;
@@ -112,9 +150,9 @@ namespace Greenshot.Capturing
                 y += to - from;
             }
 
-            if (_lastFooter > 0)
+            if (_lastFooter > 0 && _lastFooterImage != null)
             {
-                graphics.DrawImage(_previous, new Rectangle(0, y, _width, _lastFooter), new Rectangle(0, _height - _lastFooter, _width, _lastFooter), GraphicsUnit.Pixel);
+                graphics.DrawImage(_lastFooterImage, new Rectangle(0, y, _width, _lastFooter), new Rectangle(0, 0, _width, _lastFooter), GraphicsUnit.Pixel);
             }
 
             return result;

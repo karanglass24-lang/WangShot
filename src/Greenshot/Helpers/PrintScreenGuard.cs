@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Windows.Forms;
 using Dapplo.Ini;
@@ -28,13 +28,22 @@ namespace Greenshot.Helpers
             try
             {
                 using var key = Registry.CurrentUser.OpenSubKey(KeyboardKey);
-                return key?.GetValue(SnippingValue) is int value && value == 1;
+                // No value = the default of Windows 11 (22H2 and newer): PrintScreen opens the snipping tool
+                var data = key?.GetValue(SnippingValue);
+                return data is int value ? value == 1 : WindowsBuild() >= 22621;
             }
             catch (Exception ex)
             {
                 Log.Debug("Couldn't read the PrintScreen setting of Windows", ex);
                 return false;
             }
+        }
+
+        // Environment.OSVersion lies without a manifest: the build is read from the registry
+        private static int WindowsBuild()
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion");
+            return int.TryParse(key?.GetValue("CurrentBuildNumber") as string, out int build) ? build : 0;
         }
 
         /// <summary>

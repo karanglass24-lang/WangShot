@@ -319,6 +319,62 @@ namespace Greenshot.Editor.Controls
             RecalculateHeight();
         }
 
+        /// <summary>
+        /// Add one group with the colour palette and, on its right, the options of the tool (the tool strip wraps into rows): they belong together
+        /// </summary>
+        public void AddPaletteGroup(int tabIndex, string caption, Control palette, ToolStrip options)
+        {
+            options.Parent?.Controls.Remove(options);
+            options.Dock = DockStyle.None;
+            options.GripStyle = ToolStripGripStyle.Hidden;
+            options.CanOverflow = false;
+            options.Stretch = false;
+            options.AutoSize = false;
+            options.LayoutStyle = ToolStripLayoutStyle.Flow;
+            var label = new Label { Text = caption, AutoSize = false, Dock = DockStyle.Bottom, Height = Scale(20), TextAlign = ContentAlignment.MiddleCenter, UseMnemonic = false };
+            var group = new Panel { Margin = Padding.Empty };
+            palette.Location = new Point(Scale(2), Scale(2));
+            options.Size = new Size(Scale(210), palette.Height);
+            options.Location = new Point(palette.Right + Scale(12), Scale(2));
+            group.Controls.Add(palette);
+            group.Controls.Add(options);
+            group.Controls.Add(label);
+            void Fit()
+            {
+                bool any = options.Items.Cast<ToolStripItem>().Any(i => i.Available);
+                if (options.Visible != any)
+                {
+                    options.Visible = any;
+                }
+
+                int width = palette.Right + Scale(8) + (any ? Scale(4) + options.Width : 0);
+                if (group.Width != width)
+                {
+                    group.Width = width;
+                }
+
+                group.Invalidate();
+            }
+
+            options.LayoutCompleted += (s, e) => Fit();
+            group.Paint += (s, e) =>
+            {
+                using var pen = new Pen(EditorTheme.Current.Border);
+                e.Graphics.DrawLine(pen, group.Width - 1, Scale(8), group.Width - 1, group.Height - Scale(8));
+                if (options.Visible)
+                {
+                    // A thin line between the palette and the options
+                    e.Graphics.DrawLine(pen, options.Left - Scale(7), Scale(10), options.Left - Scale(7), palette.Height - Scale(6));
+                }
+            };
+            group.Tag = palette.Height + label.Height + Scale(8);
+            group.Height = (int)group.Tag;
+            Fit();
+            _tabs[tabIndex].Body.Controls.Add(group);
+            _groups.Add(group);
+            ApplyTheme(EditorTheme.Current);
+            RecalculateHeight();
+        }
         private void BuildGroup(int tabIndex, string caption, ToolStrip strip)
         {
             var label = new Label

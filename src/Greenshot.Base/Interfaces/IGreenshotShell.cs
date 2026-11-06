@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Greenshot - a free and open source screenshot tool
  * Copyright (C) 2007-2026 Thomas Braun, Jens Klingen, Robin Krom
  * 
@@ -53,6 +53,11 @@ namespace Greenshot.Base.Interfaces
         /// Show the about window
         /// </summary>
         void ShowAbout();
+
+        /// <summary>
+        /// 왕샷: capture the window under the mouse as a whole page (it is scrolled step by step)
+        /// </summary>
+        void StartScrollCapture();
 
         /// <summary>
         /// Refresh what depends on the configuration or the language (e.g. the tray icon tooltip)

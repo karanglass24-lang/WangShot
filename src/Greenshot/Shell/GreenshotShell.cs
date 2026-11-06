@@ -444,6 +444,9 @@ namespace Greenshot.Shell
         }
 
         /// <inheritdoc />
+        public void StartScrollCapture() => Greenshot.Capturing.ScrollCapture.RunAsync().FireAndLog("Scroll capture", Log);
+
+        /// <inheritdoc />
         public void ShowAbout()
         {
             if (_aboutWindow != null && _aboutWindow.IsLoaded)
