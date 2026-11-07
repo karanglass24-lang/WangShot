@@ -26,7 +26,7 @@ namespace Greenshot.Editor.Drawing.Adorners
             int cx = b.Left + b.Width / 2;
             int cy = b.Top + b.Height / 2;
             // Thickness and length of the bracket, relative to the handle size
-            int t = System.Math.Max(3, b.Width / 4);
+            int t = System.Math.Max(6, b.Width * 4 / 9);
             int a = System.Math.Max(10, b.Width);
             int sx = Position == Positions.TopLeft || Position == Positions.BottomLeft || Position == Positions.MiddleLeft ? 1 : -1;
             int sy = Position == Positions.TopLeft || Position == Positions.TopRight || Position == Positions.TopCenter ? 1 : -1;

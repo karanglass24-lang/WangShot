@@ -185,6 +185,10 @@ namespace Greenshot.Base.Core
         [DefaultValue("")]
         string OutputFilePrefix { get; set; }
 
+        [Description("Use the title of the captured window (the name of the editor tab) as the file name, instead of the pattern. Without a title the pattern is used.")]
+        [DefaultValue(false)]
+        bool OutputFileNameFromTitle { get; set; }
+
         [Description("The prefix the ${NUM} counter belongs to, set automatically.")]
         [DefaultValue("")]
         string OutputFilePrefixOfCounter { get; set; }

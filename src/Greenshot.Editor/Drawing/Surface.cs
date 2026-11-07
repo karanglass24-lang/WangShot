@@ -1362,7 +1362,10 @@ namespace Greenshot.Editor.Drawing
             {
                 long lengtBefore = streamWrite.Length;
                 BinaryFormatter binaryWrite = new BinaryFormatter();
-                binaryWrite.Serialize(streamWrite, _elements);
+                // The crop area is no element of the capture (and isn't serializable): not with the elements to the clipboard, the clone or the file
+                var elementsToSave = new DrawableContainerList(_uniqueId);
+                elementsToSave.AddRange(_elements.Where(element => element is not CropContainer));
+                binaryWrite.Serialize(streamWrite, elementsToSave);
                 bytesWritten = streamWrite.Length - lengtBefore;
             }
             catch (Exception e)
@@ -1860,6 +1863,8 @@ namespace Greenshot.Editor.Drawing
             _undrawnElement = null;
             // The border crop stays on after Enter, until another tool is chosen
             _keepEdgeCrop = true;
+            // The handles are drawn at once, not with the next mouse move
+            Invalidate();
             return true;
         }
 

@@ -1,4 +1,6 @@
-﻿using System;
+﻿using Dapplo.Ini;
+using System.Linq;
+using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -118,8 +120,12 @@ namespace Greenshot.Capturing
                     var surface = new Surface(bitmap);
                     surface.CaptureDetails.Title = string.IsNullOrWhiteSpace(title) ? "스크롤 캡처" : title;
                     ImageEditorForm.Open(surface);
-                    // Saved like every capture: in the folder with the next number
-                    DestinationHelper.StartExport(WellKnownDestinations.FileNoDialog, surface);
+                    // Saved like every capture, only when the settings save the captures in a file (Settings > Destination)
+                    var destinations = IniConfigRegistry.GetSection<ICoreConfiguration>()?.OutputDestinations;
+                    if (destinations != null && destinations.Contains(nameof(WellKnownDestinations.FileNoDialog), StringComparer.OrdinalIgnoreCase))
+                    {
+                        DestinationHelper.StartExport(WellKnownDestinations.FileNoDialog, surface);
+                    }
                 }).ConfigureAwait(false);
 
                 Notify(frames < 2

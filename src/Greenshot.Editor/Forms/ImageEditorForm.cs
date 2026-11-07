@@ -196,10 +196,22 @@ namespace Greenshot.Editor.Forms
             // A window which is closing (its question or its saves are running) doesn't get new captures
             if (window == null || window.IsDisposed || window._closing)
             {
-                window = new ImageEditorForm(surface, !surface.Modified, matchSizeToCapture);
+                // 왕샷: a spare window made in the idle time opens at once, a new window takes over 1.5 seconds
+                var spare = TakeSpareWindow();
+                if (spare != null)
+                {
+                    window = spare;
+                    window.UseSpareFor(surface, matchSizeToCapture);
+                }
+                else
+                {
+                    window = new ImageEditorForm(surface, !surface.Modified, matchSizeToCapture);
+                }
+
                 window.Show();
                 window.Activate();
                 window.StartCropOnCapture();
+                PrepareSpareWindowLater();
                 return window.SelectedTab;
             }
 
@@ -213,6 +225,78 @@ namespace Greenshot.Editor.Forms
             window.Activate();
             window.StartCropOnCapture();
             return tab;
+        }
+
+        private static ImageEditorForm _spareWindow;
+
+        private static ImageEditorForm TakeSpareWindow()
+        {
+            var spare = _spareWindow;
+            _spareWindow = null;
+            return spare == null || spare.IsDisposed || spare.Disposing ? null : spare;
+        }
+
+        /// <summary>
+        /// 왕샷: make the editor window of the next capture while the computer is idle: hidden, with an empty image.
+        /// It costs some memory, the setting "prepare the editor" (memory profile) switches it off.
+        /// </summary>
+        internal static void PrepareSpareWindowLater() => PrepareSpareWindowAsync().FireAndLog("Prepare the spare editor window", Log);
+
+        private static async Task PrepareSpareWindowAsync()
+        {
+            var ui = SimpleServiceProvider.Current.GetInstance<IUiDispatcher>(isOptional: true);
+            if (ui == null)
+            {
+                return;
+            }
+
+            // Making the window takes over a second of the UI thread: not while the capture is shown and painted
+            await Task.Delay(4000).ConfigureAwait(false);
+            await ui.InvokeAsync(() =>
+            {
+                try
+                {
+                    var configuration = IniConfigRegistry.GetSection<ICoreConfiguration>();
+                    if (_spareWindow != null || configuration == null || !configuration.PrewarmEditor)
+                    {
+                        return;
+                    }
+
+                    var spare = new ImageEditorForm(CreateNewImage(), true);
+                    // The window is not an open editor yet: no capture is added to it, it isn't listed
+                    spare.RemoveFromOpenWindows();
+                    // The handle exists already, showing the window later is quick
+                    _ = spare.Handle;
+                    _spareWindow = spare;
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn("Couldn't prepare the spare editor window", ex);
+                }
+            }).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// The capture goes into the spare window: its empty image is replaced, the window is placed like a new one
+        /// </summary>
+        private void UseSpareFor(ISurface surface, bool? matchSizeToCapture)
+        {
+            _matchSizeToCapture = matchSizeToCapture;
+            var placeholder = Tabs.FirstOrDefault();
+            lock (OpenWindowsLock)
+            {
+                OpenWindowList.Add(this);
+            }
+
+            ApplyStoredPlacement();
+            AddTab(surface, !surface.Modified, fitWindow: true);
+            if (placeholder != null)
+            {
+                RemoveTab(placeholder);
+                placeholder.Dispose();
+            }
+
+            HideToolstripItems();
         }
 
         /// <summary>

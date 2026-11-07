@@ -93,6 +93,8 @@ namespace Greenshot.Editor
             }, cancellationToken).ConfigureAwait(false);
 
             await emojiTask.ConfigureAwait(false);
+            // 왕샷: and the window of the first capture, hidden
+            ImageEditorForm.PrepareSpareWindowLater();
             Log.DebugFormat("Prepared the editor in {0} ms, {1} methods were JIT-compiled.", stopwatch.ElapsedMilliseconds, preparedMethods);
         }
     }

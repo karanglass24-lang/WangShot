@@ -573,6 +573,9 @@
                                               IsEnabled="{Binding CoreConfiguration, Converter={StaticResource FixedToEnabledConverter}, ConverterParameter=OutputFileFormat}"/>
                                 </Grid>
                                 
+                                <CheckBox Content="캡처한 창 제목(탭 이름)을 파일 이름으로 사용" Margin="0,4,0,0"
+                                          ToolTip="창 제목이 없으면 위의 파일명 유형을 써요. 같은 이름이 있으면 (2)가 붙어요."
+                                          IsChecked="{Binding CoreConfiguration.OutputFileNameFromTitle, Mode=TwoWay}"/>
                                 <CheckBox Content="{wpf:Text Settings.Copypathtoclipboard}"
                                           IsChecked="{Binding CoreConfiguration.OutputFileCopyPathToClipboard, Mode=TwoWay}"
                                           IsEnabled="{Binding CoreConfiguration, Converter={StaticResource FixedToEnabledConverter}, ConverterParameter=OutputFileCopyPathToClipboard}"/>

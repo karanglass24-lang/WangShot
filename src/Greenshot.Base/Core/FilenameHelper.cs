@@ -111,9 +111,15 @@ namespace Greenshot.Base.Core
             return GetFilenameWithoutExtensionFromPattern(pattern, null);
         }
 
+        /// <summary>
+        /// 왕샷: with the option, the title of the captured window (the name of the editor tab) is the file name, with the prefix
+        /// </summary>
+        private static string PatternWithTitle(string pattern, ICaptureDetails captureDetails) =>
+            CoreConfig.OutputFileNameFromTitle && !string.IsNullOrWhiteSpace(captureDetails?.Title) ? "${prefix}${title}" : pattern;
+
         public static string GetFilenameWithoutExtensionFromPattern(string pattern, ICaptureDetails captureDetails)
         {
-            return FillPattern(pattern, captureDetails, true);
+            return FillPattern(PatternWithTitle(pattern, captureDetails), captureDetails, true);
         }
 
         public static string GetFilenameFromPattern(string pattern, string formatId)
@@ -123,7 +129,7 @@ namespace Greenshot.Base.Core
 
         public static string GetFilenameFromPattern(string pattern, string formatId, ICaptureDetails captureDetails)
         {
-            return FillPattern(pattern, captureDetails, true) + FileFormatRegistry.GetPreferredExtensionWithDot(formatId);
+            return FillPattern(PatternWithTitle(pattern, captureDetails), captureDetails, true) + FileFormatRegistry.GetPreferredExtensionWithDot(formatId);
         }
 
         /// <summary>
