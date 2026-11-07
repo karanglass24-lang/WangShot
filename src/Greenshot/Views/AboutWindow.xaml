@@ -186,6 +186,21 @@
                             </TextBlock>
                         </Grid>
 
+                        <!-- Maker -->
+                        <Grid Margin="0,2,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="24"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="1" TextWrapping="Wrap" VerticalAlignment="Center">
+                                <TextBlock Text="만든 곳:" Foreground="{Binding TextSecondaryBrush}"/>
+                                <Run Text=" "/>
+                                <Hyperlink NavigateUri="https://dumok.net" RequestNavigate="OnHyperlinkRequestNavigate">
+                                    <Run Text="https://dumok.net"/>
+                                </Hyperlink>
+                            </TextBlock>
+                        </Grid>
+
                         <!-- Icons Attribution -->
                         <Grid Margin="0,2,0,6">
                             <Grid.ColumnDefinitions>

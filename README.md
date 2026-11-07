@@ -2,6 +2,8 @@
 
 교재·문서 집필용 스크린샷 프로그램. 오픈소스 [Greenshot](https://github.com/greenshot/greenshot)(GPL-3.0)을 기반으로 만들었어요.
 
+만든 곳: [두목넷](https://dumok.net)
+
 ## 주요 기능
 
 - **PrintScreen** 으로 창·대화상자·사각형 영역 캡처 (창 위에서 클릭 = 창, 드래그 = 영역)
@@ -29,3 +31,10 @@ dotnet build src/Greenshot/Greenshot.csproj -c Release
 ## 라이선스
 
 GPL-3.0-or-later. 원본 Greenshot 의 저작권은 Greenshot 개발자들에게 있고, 원본 설명서는 [README.greenshot.md](README.greenshot.md) 에 남겨 두었어요.
+
+## 만든 사람
+
+왕두목 · [두목넷 dumok.net](https://dumok.net) — 정보처리·사무자동화·컴활 자격증 온라인 강의
+
+- 학습 블로그: https://dumok.net/blog
+- 유튜브: https://www.youtube.com/@extudy
