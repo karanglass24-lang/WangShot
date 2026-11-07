@@ -199,6 +199,7 @@ namespace Greenshot.Editor.Forms
                 window = new ImageEditorForm(surface, !surface.Modified, matchSizeToCapture);
                 window.Show();
                 window.Activate();
+                window.StartCropOnCapture();
                 return window.SelectedTab;
             }
 
@@ -210,7 +211,32 @@ namespace Greenshot.Editor.Forms
 
             window.BringToFront();
             window.Activate();
+            window.StartCropOnCapture();
             return tab;
+        }
+
+        /// <summary>
+        /// 왕샷: a new capture opens with the crop tool, the crop area on the whole image, so the border is grabbed at once
+        /// </summary>
+        private void StartCropOnCapture()
+        {
+            var surface = SelectedTab?.Surface;
+            if (surface == null || surface.Image == null || _surface != surface)
+            {
+                return;
+            }
+
+            if (!_lastCropWasEdge)
+            {
+                return;
+            }
+
+            _surface.AreaSelectMode = false;
+            _edgeCrop = true;
+            if (_surface.StartFullCrop())
+            {
+                RefreshEditorControls();
+            }
         }
 
         /// <summary>
@@ -546,6 +572,14 @@ namespace Greenshot.Editor.Forms
             // The InitializeComponent() call is required for Windows Forms designer support.
             //
             InitializeComponent();
+            // 왕샷: image files dropped from the explorer open in a new editor
+            AllowDrop = true;
+            DragEnter += (s, e) => e.Effect = Surface.GetDroppedImageFiles(e.Data) != null ? DragDropEffects.Copy : DragDropEffects.None;
+            DragDrop += (s, e) =>
+            {
+                var files = Surface.GetDroppedImageFiles(e.Data);
+                if (files != null) Surface.OpenDroppedImageFiles(files);
+            };
             // 왕샷: a drawing tool also works on the area around the image, the canvas grows when the element is finished
             panel1.MouseDown += CanvasSurroundMouseDown;
             panel1.MouseMove += CanvasSurroundMouseMove;
@@ -677,7 +711,7 @@ namespace Greenshot.Editor.Forms
             }
 
             timing.Mark("Rest");
-            Log.Debug("Editor constructed: " + timing);
+            Log.Info("Editor constructed: " + timing);
         }
 
         /// <summary>
@@ -851,6 +885,34 @@ namespace Greenshot.Editor.Forms
         /// <summary>
         /// A new image (the size and the color are in the settings) as a new tab, like the "+" after the tabs
         /// </summary>
+        /// <summary>
+        /// 왕샷: close every tab but keep the editor open with an empty new image
+        /// </summary>
+        private async Task CloseAllTabsKeepWindowAsync()
+        {
+            if (_closing)
+            {
+                return;
+            }
+
+            var old = Tabs.ToList();
+            if (!await ConfirmCloseAsync(old))
+            {
+                return;
+            }
+
+            AddNewImageTab();
+            foreach (var tab in old)
+            {
+                if (tab.Window == this)
+                {
+#pragma warning disable VSTHRD103 // The confirmation is done, closing is not asked again
+                    CloseTab(tab);
+#pragma warning restore VSTHRD103
+                }
+            }
+        }
+
         private void AddNewImageTab()
         {
             // Nothing to save before something is drawn on the new image
@@ -893,6 +955,8 @@ namespace Greenshot.Editor.Forms
             window.FocusCanvas(fromKeyboard: true);
         }
 
+        private ToolStripMenuItem _closeAllTabsMenuItem;
+
         /// <summary>
         /// The context menu of the tab strip, for the selected tab. It gives the keyboard what is done with the mouse on the tabs.
         /// </summary>
@@ -905,6 +969,9 @@ namespace Greenshot.Editor.Forms
                 ShortcutKeys = Keys.Control | Keys.W
             };
             _closeTabTabMenuItem.Click += (s, e) => CloseTabAsync(SelectedTab).FireAndLog("Close a tab of the editor", Log);
+            // 왕샷: close every tab of this window, the changed captures are asked about like on closing the window
+            _closeAllTabsMenuItem = new ToolStripMenuItem { Text = "모든 탭 닫기" };
+            _closeAllTabsMenuItem.Click += (s, e) => CloseAllTabsKeepWindowAsync().FireAndLog("Close all tabs of the editor", Log);
             _moveTabLeftMenuItem = new ToolStripMenuItem
             {
                 ShortcutKeys = Keys.Control | Keys.Shift | Keys.PageUp
@@ -922,7 +989,7 @@ namespace Greenshot.Editor.Forms
             _tabContextMenu.Items.AddRange(new ToolStripItem[]
             {
                 _newImageTabMenuItem, new ToolStripSeparator(), _moveTabLeftMenuItem, _moveTabRightMenuItem, _moveTabToNewWindowMenuItem,
-                new ToolStripSeparator(), _closeTabTabMenuItem
+                new ToolStripSeparator(), _closeTabTabMenuItem, _closeAllTabsMenuItem
             });
             _tabContextMenu.Opening += (s, e) =>
             {
@@ -1808,7 +1875,7 @@ namespace Greenshot.Editor.Forms
                     SetButtonChecked(btnArrow);
                     break;
                 case DrawingModes.Crop:
-                    SetButtonChecked(btnCrop);
+                    SetButtonChecked(_edgeCrop && btnCropEdge != null ? btnCropEdge : btnCrop);
                     break;
                 case DrawingModes.Highlight:
                     SetButtonChecked(btnHighlight);
@@ -1935,11 +2002,39 @@ namespace Greenshot.Editor.Forms
             RefreshFieldControls();
         }
 
+        // 왕샷: the crop tool has two ways: select an area to keep, or pull the borders of the whole image inwards
+        private ToolStripButton btnCropEdge;
+        private bool _edgeCrop;
+        private static bool _lastCropWasEdge = true;
+
+        private void BtnCropEdgeClick(object sender, EventArgs e)
+        {
+            _surface.AreaSelectMode = false;
+            if (_surface.DrawingMode == DrawingModes.Crop && _edgeCrop) return;
+
+            _edgeCrop = true;
+            _lastCropWasEdge = true;
+            _surface.DrawingMode = DrawingModes.None;
+            _surface.RemoveCropContainer();
+            _surface.StartFullCrop();
+            RefreshEditorControls();
+            RefreshFieldControls();
+        }
+
         private void BtnCropClick(object sender, EventArgs e)
         {
             _surface.AreaSelectMode = false;
-            if (_surface.DrawingMode == DrawingModes.Crop) return;
+            if (_surface.DrawingMode == DrawingModes.Crop && !_edgeCrop) return;
 
+            if (_edgeCrop)
+            {
+                // From the borders to the selection: the crop area of the whole image goes
+                _surface.DrawingMode = DrawingModes.None;
+                _surface.RemoveCropContainer();
+            }
+
+            _edgeCrop = false;
+            _lastCropWasEdge = false;
             _surface.DrawingMode = DrawingModes.Crop;
             InitCropMode((CropContainer.CropModes)_surface.FieldAggregator.GetField(FieldType.CROPMODE).Value);
             RefreshFieldControls();
@@ -1971,6 +2066,11 @@ namespace Greenshot.Editor.Forms
 
         private void UncheckAllToolButtons()
         {
+            if (btnCropEdge != null)
+            {
+                btnCropEdge.Checked = false;
+            }
+
             if (_toolbarButtons != null)
             {
                 foreach (ToolStripButton butt in _toolbarButtons)
@@ -2990,6 +3090,9 @@ namespace Greenshot.Editor.Forms
                 btnFillColor.Visible = props.HasFieldValue(FieldType.FILL_COLOR);
                 btnLineColor.Visible = props.HasFieldValue(FieldType.LINE_COLOR);
                 lineThicknessLabel.Visible = lineThicknessUpDown.Visible = props.HasFieldValue(FieldType.LINE_THICKNESS);
+                _palette?.SetThickness(props.HasFieldValue(FieldType.LINE_THICKNESS), (int)lineThicknessUpDown.Value);
+                // The palette column has these options: fill, line, thickness
+                btnFillColor.Visible = btnLineColor.Visible = lineThicknessLabel.Visible = lineThicknessUpDown.Visible = false;
                 toothHeightLabel.Visible = toothHeightUpDown.Visible = props.HasFieldValue(FieldType.TOOTH_HEIGHT);
                 toothRangeLabel.Visible = toothRangeUpDown.Visible = props.HasFieldValue(FieldType.TOOTH_RANGE);
                 btnApplyToImage.Visible = _surface.SelectedElements?.Any(element => element is CutMarkContainer or TornEdgeContainer) == true;
@@ -3079,7 +3182,8 @@ namespace Greenshot.Editor.Forms
             FieldAggregator props = (FieldAggregator)_surface.FieldAggregator;
             // if a confirmable element is selected, we must disable most of the controls
             // since we demand confirmation or cancel for confirmable element
-            if (props.HasFieldValue(FieldType.FLAGS) && ((FieldFlag)props.GetFieldValue(FieldType.FLAGS) & FieldFlag.CONFIRMABLE) == FieldFlag.CONFIRMABLE)
+            bool borderCropOn = _edgeCrop && _surface.DrawingMode == DrawingModes.Crop;
+            if (!borderCropOn && props.HasFieldValue(FieldType.FLAGS) && ((FieldFlag)props.GetFieldValue(FieldType.FLAGS) & FieldFlag.CONFIRMABLE) == FieldFlag.CONFIRMABLE)
             {
                 // disable most controls
                 if (!_controlsDisabledDueToConfirmable)

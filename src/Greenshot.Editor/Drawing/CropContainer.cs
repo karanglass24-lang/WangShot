@@ -87,7 +87,16 @@ namespace Greenshot.Editor.Drawing
                     }
                 default:
                     {
-                        CreateDefaultAdorners();
+                        // 왕샷: black corner brackets and edge bars on the border, like PicPick/PowerPoint
+                        foreach (var position in new[]
+                                 {
+                                     Positions.TopLeft, Positions.TopCenter, Positions.TopRight, Positions.BottomLeft,
+                                     Positions.BottomCenter, Positions.BottomRight, Positions.MiddleLeft, Positions.MiddleRight
+                                 })
+                        {
+                            Adorners.Add(new CropAdorner(this, position));
+                        }
+
                         break;
                     }
             }

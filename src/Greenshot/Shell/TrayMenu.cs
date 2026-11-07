@@ -168,7 +168,7 @@ namespace Greenshot.Shell
             captureWindow.InputGestureText = HotkeyText(conf.WindowHotkey);
 
             // 왕샷: a screenshot of a whole page (the window under the mouse is scrolled)
-            AddItem(menu, "스크롤 캡처 (마우스 아래 창)", null, () => Greenshot.Capturing.ScrollCapture.RunAsync().FireAndLog("Scroll capture", Log));
+            AddItem(menu, "스크롤 캡처 (마우스 아래 창)", "contextmenu_scrollcapture.Image", () => Greenshot.Capturing.ScrollCapture.RunAsync().FireAndLog("Scroll capture", Log));
 
             menu.Items.Add(CreateFullscreenItem(conf));
             // The mouse cursor in the capture: on or off right here

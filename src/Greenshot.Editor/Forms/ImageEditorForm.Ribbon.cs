@@ -58,7 +58,7 @@ namespace Greenshot.Editor.Forms
             var clipboardGroup = AddRibbonGroup(home, "클립보드", (btnPaste, "붙여넣기"), (btnCut, "잘라내기"), (btnCopy, "복사"), (btnDelete, "삭제"));
             foreach (ToolStripItem item in clipboardGroup.Items)
             {
-                item.Padding = new Padding(2, 2, 2, 15);
+                item.Padding = new Padding(2, 2, 2, 28);
             }
 
             // The select tool and the emoji tool have a chevron under them: a drop-down with more choices
@@ -86,20 +86,40 @@ namespace Greenshot.Editor.Forms
             // Room under every tool for the chevron, so the names stand in one line
             foreach (ToolStripItem tool in tools.Items)
             {
-                tool.Padding = new Padding(2, 2, 2, 15);
+                tool.Padding = new Padding(2, 2, 2, 28);
             }
             var effectsTool = new ToolStripDropButton { ToolTipText = "효과", DropDown = BuildEffectsMenu() };
             effectsTool.MirrorOfAction(toolStripSplitButton1, () => effectsTool.ShowDropDown());
-            var imageGroup = AddRibbonGroup(home, "이미지", (btnCrop, "자르기"), (btnResize, "크기"), (rotateCwToolstripButton, "우회전"), (rotateCcwToolstripButton, "좌회전"), (effectsTool, "효과"));
+            // 왕샷: crop by selecting an area to keep, or by pulling the borders of the whole image inwards
+            btnCropEdge = new ToolStripButton { Text = "테두리 자르기", ToolTipText = "테두리 자르기: 이미지 상하좌우 가장자리를 안쪽으로 당겨 줄여요 (Enter로 적용)", DisplayStyle = ToolStripItemDisplayStyle.ImageAndText, CheckOnClick = false };
+            IconBinder.Bind(btnCropEdge, IconSource.FromResource(typeof(ImageEditorForm), "btnCropEdge.Image"));
+            btnCropEdge.Click += BtnCropEdgeClick;
+            var cropTool = new ToolStripDropButton();
+            cropTool.SetMembers((btnCropEdge, "테두리 자르기"), (btnCrop, "선택 자르기"));
+            var imageGroup = AddRibbonGroup(home, "이미지", (cropTool, null), (btnResize, "크기"), (rotateCwToolstripButton, "우회전"), (rotateCcwToolstripButton, "좌회전"), (effectsTool, "효과"));
             foreach (ToolStripItem item in imageGroup.Items)
             {
-                item.Padding = new Padding(2, 2, 2, 15);
+                item.Padding = new Padding(2, 2, 2, 28);
             }
 
             // The colours: line colour, fill colour and a palette
             _palette = new ColorPaletteControl();
+            _palette.ThicknessChanged += value => lineThicknessUpDown.Value = value;
             _palette.ColorChosen += (color, fill) => _surface.FieldAggregator.GetField(fill ? Greenshot.Editor.Drawing.Fields.FieldType.FILL_COLOR : Greenshot.Editor.Drawing.Fields.FieldType.LINE_COLOR).Value = color;
             // The options of the tool or of the selected element (colour, thickness, font ...) are in the same group, shown only when there are some
+            // The fill colour, the line colour and the line thickness are in the palette column (fill, line, thickness): the same options of the tool strip stay hidden
+            foreach (var colorButton in new ToolStripItem[] { btnFillColor, btnLineColor, lineThicknessLabel, lineThicknessUpDown })
+            {
+                colorButton.Available = false;
+                colorButton.AvailableChanged += (s, e) =>
+                {
+                    if (colorButton.Available)
+                    {
+                        colorButton.Available = false;
+                    }
+                };
+            }
+
             _ribbon.AddPaletteGroup(home, "색상 · 속성", _palette, propertiesToolStrip);
 
             // ---- Edit

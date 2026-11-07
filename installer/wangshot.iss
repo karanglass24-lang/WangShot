@@ -2,7 +2,7 @@
 ;   ISCC.exe installer\wangshot.iss
 ; 먼저 빌드: dotnet build src\Greenshot\Greenshot.csproj -c Release
 #define AppName "왕샷"
-#define AppVersion "1.1.2"
+#define AppVersion "1.2.0"
 #define AppExe "WangShot.exe"
 #define BuildDir "..\src\Greenshot\bin\Release\net480"
 
@@ -57,6 +57,8 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "WangShot"; ValueData: """{app}\{#AppExe}"" --autostart"; Flags: uninsdeletevalue; Tasks: startup
 
 [Run]
+; 첫 실행이 빨라지도록 미리 컴파일해 둬요 (실패해도 설치는 계속)
+Filename: "{dotnet40}\ngen.exe"; Parameters: "install ""{app}\{#AppExe}"""; Flags: runhidden waituntilterminated; StatusMsg: "빠른 시작을 준비하는 중..."
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 ; 자동 업데이트(/SILENT /relaunch=1)로 설치했을 때는 끝나고 왕샷을 다시 실행해요
 Filename: "{app}\{#AppExe}"; Flags: nowait runasoriginaluser; Check: ShouldRelaunch

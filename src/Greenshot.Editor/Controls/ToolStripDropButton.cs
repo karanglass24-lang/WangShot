@@ -43,7 +43,8 @@ namespace Greenshot.Editor.Controls
         {
             get
             {
-                int height = (Owner?.DeviceDpi ?? 96) * 16 / 96;
+                // Like Office: under the name there is a row of its own with the chevron, it opens the menu
+                int height = Math.Min(Height, (Owner?.DeviceDpi ?? 96) * 26 / 96);
                 return new Rectangle(0, Math.Max(0, Height - height), Width, Math.Min(Height, height));
             }
         }
@@ -198,8 +199,45 @@ namespace Greenshot.Editor.Controls
         {
             if (Owner != null && DropDown != null)
             {
-                DropDown.Show(Owner.PointToScreen(new Point(Bounds.Left, Bounds.Bottom)));
+                var location = Owner.PointToScreen(new Point(Bounds.Left, Bounds.Bottom));
+                DropDown.Opacity = 0;
+                DropDown.Show(location);
+                Animate(DropDown, location);
             }
+        }
+
+        /// <summary>
+        /// The menu fades in and slides down a few pixels, like the menus of Office
+        /// </summary>
+        internal static void Animate(ToolStripDropDown menu, Point location)
+        {
+            const int steps = 8;
+            int offset = Math.Max(4, menu.DeviceDpi * 8 / 96);
+            int step = 0;
+            var timer = new Timer { Interval = 15 };
+            timer.Tick += (s, e) =>
+            {
+                step++;
+                if (menu.IsDisposed || !menu.Visible || step >= steps)
+                {
+                    timer.Stop();
+                    timer.Dispose();
+                    if (!menu.IsDisposed && menu.Visible)
+                    {
+                        menu.Opacity = 1;
+                        menu.Location = location;
+                    }
+
+                    return;
+                }
+
+                // Ease out: fast first, slow at the end
+                double t = 1 - Math.Pow(1 - step / (double)steps, 3);
+                menu.Opacity = t;
+                menu.Location = new Point(location.X, location.Y - (int)Math.Round(offset * (1 - t)));
+            };
+            menu.Location = new Point(location.X, location.Y - offset);
+            timer.Start();
         }
     }
 }

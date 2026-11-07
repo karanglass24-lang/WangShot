@@ -334,7 +334,26 @@ namespace Greenshot.Editor.Controls
             var label = new Label { Text = caption, AutoSize = false, Dock = DockStyle.Bottom, Height = Scale(20), TextAlign = ContentAlignment.MiddleCenter, UseMnemonic = false };
             var group = new Panel { Margin = Padding.Empty };
             palette.Location = new Point(Scale(2), Scale(2));
-            options.Size = new Size(Scale(210), palette.Height);
+            options.Size = new Size(Scale(330), palette.Height);
+            // Tidy rows like PicPick/Snagit: the same spacing everywhere, a label sits close to its field and the pairs keep a gap between them
+            options.Padding = new Padding(Scale(2), Scale(2), 0, 0);
+            void Tidy(ToolStripItem item)
+            {
+                item.Margin = item is ToolStripLabel && !(item is ToolStripButton) && !(item is ToolStripDropDownItem)
+                    ? new Padding(Scale(8), Scale(3), Scale(2), Scale(3))
+                    : new Padding(Scale(2), Scale(2), Scale(2), Scale(2));
+                if (item is ToolStripLabel label2 && !(item is ToolStripButton))
+                {
+                    label2.TextAlign = ContentAlignment.MiddleLeft;
+                }
+            }
+
+            foreach (ToolStripItem item in options.Items)
+            {
+                Tidy(item);
+            }
+
+            options.ItemAdded += (s, e) => Tidy(e.Item);
             options.Location = new Point(palette.Right + Scale(12), Scale(2));
             group.Controls.Add(palette);
             group.Controls.Add(options);

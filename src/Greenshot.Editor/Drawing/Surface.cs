@@ -967,6 +967,17 @@ namespace Greenshot.Editor.Drawing
             set
             {
                 _drawingMode = value;
+                if (value != DrawingModes.Crop)
+                {
+                    // Choosing another tool ends the border crop
+                    if (_keepEdgeCrop)
+                    {
+                        RemoveCropContainer();
+                    }
+
+                    _keepEdgeCrop = false;
+                }
+
                 if (_drawingModeChanged != null)
                 {
                     SurfaceDrawingModeEventArgs eventArgs = new SurfaceDrawingModeEventArgs
@@ -1629,9 +1640,42 @@ namespace Greenshot.Editor.Drawing
         private static DataObjectReader CreateDropReader(DragEventArgs e) =>
             e.Data is System.Runtime.InteropServices.ComTypes.IDataObject comDataObject ? new DataObjectReader(comDataObject) : null;
 
+        private static readonly string[] DroppableImageExtensions = { ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tif", ".tiff", ".webp", ".ico", ".jfif" };
+
+        /// <summary>
+        /// 왕샷: image files dragged from the explorer
+        /// </summary>
+        internal static string[] GetDroppedImageFiles(IDataObject data)
+        {
+            if (data == null || !data.GetDataPresent(DataFormats.FileDrop))
+            {
+                return null;
+            }
+
+            var files = (data.GetData(DataFormats.FileDrop) as string[] ?? Array.Empty<string>())
+                .Where(f => !string.IsNullOrEmpty(f) && DroppableImageExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()) && File.Exists(f))
+                .ToArray();
+            return files.Length > 0 ? files : null;
+        }
+
+        internal static void OpenDroppedImageFiles(string[] files)
+        {
+            var shell = SimpleServiceProvider.Current.GetInstance<IGreenshotShell>();
+            foreach (var file in files)
+            {
+                shell.OpenImageFile(file);
+            }
+        }
+
         private void OnDragEnter(object sender, DragEventArgs e)
         {
             e.Effect = DragDropEffects.None;
+            if (GetDroppedImageFiles(e.Data) != null)
+            {
+                e.Effect = DragDropEffects.Copy;
+                return;
+            }
+
             if ((e.AllowedEffect & DragDropEffects.Copy) != DragDropEffects.Copy)
             {
                 return;
@@ -1682,6 +1726,13 @@ namespace Greenshot.Editor.Drawing
         /// <param name="e"></param>
         private void OnDragDrop(object sender, DragEventArgs e)
         {
+            var droppedFiles = GetDroppedImageFiles(e.Data);
+            if (droppedFiles != null)
+            {
+                OpenDroppedImageFiles(droppedFiles);
+                return;
+            }
+
             NativePoint mouse = PointToClient(new NativePoint(e.X, e.Y));
             using var reader = CreateDropReader(e);
             if (reader == null)
@@ -1778,6 +1829,39 @@ namespace Greenshot.Editor.Drawing
         }
 
         #endregion
+
+        /// <summary>
+        /// 왕샷: start cropping with the crop rectangle on the whole image, its 8 handles sit on the border of the image
+        /// </summary>
+        private bool _keepEdgeCrop;
+
+        public bool StartFullCrop()
+        {
+            if (Image == null)
+            {
+                return false;
+            }
+
+            DeselectAllElements();
+            DrawingMode = DrawingModes.Crop;
+            if (_undrawnElement == null)
+            {
+                return false;
+            }
+
+            _undrawnElement.Left = 0;
+            _undrawnElement.Top = 0;
+            _undrawnElement.Width = Image.Width;
+            _undrawnElement.Height = Image.Height;
+            _undrawnElement.Status = EditStatus.UNDRAWN;
+            AddElement(_undrawnElement);
+            SelectElement(_undrawnElement);
+            _drawingElement = null;
+            _undrawnElement = null;
+            // The border crop stays on after Enter, until another tool is chosen
+            _keepEdgeCrop = true;
+            return true;
+        }
 
         /// <summary>
         /// Auto crop the image
@@ -3850,6 +3934,7 @@ namespace Greenshot.Editor.Drawing
         public void ConfirmCrop(bool confirm)
         {
             if (_cropContainer is not CropContainer e) return;
+            bool keepEdgeCrop = confirm && _keepEdgeCrop;
                     
             if (confirm && selectedElements.Count > 0)
             {
@@ -3872,6 +3957,10 @@ namespace Greenshot.Editor.Drawing
             }
 
             DrawingMode = DrawingModes.None;
+            if (keepEdgeCrop)
+            {
+                StartFullCrop();
+            }
 
             // maybe the undo button has to be enabled
             _movingElementChanged?.Invoke(this, new SurfaceElementEventArgs());

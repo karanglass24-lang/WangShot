@@ -60,6 +60,11 @@ namespace Greenshot.Base.Interfaces
         void StartScrollCapture();
 
         /// <summary>
+        /// 왕샷: open an image file in a new editor (file dropped from the explorer)
+        /// </summary>
+        void OpenImageFile(string filePath);
+
+        /// <summary>
         /// Refresh what depends on the configuration or the language (e.g. the tray icon tooltip)
         /// </summary>
         void UpdateUi();

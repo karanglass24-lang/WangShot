@@ -7,34 +7,67 @@ using System.Windows.Forms;
 namespace Greenshot.Editor.Controls
 {
     /// <summary>
-    /// 왕샷: the colours of the ribbon: the line colour (Color1) and the fill colour (Color2) as two large squares, and a palette. A click on a
-    /// colour of the palette sets the line colour, a right click the fill colour. The last colours chosen are in the third row.
+    /// 왕샷: the colours of the ribbon like in Office: two buttons, "도형 채우기" and "도형 윤곽선", each opens a colour grid
+    /// (theme colours with their shades, standard colours, the last colours, no colour, more colours).
     /// </summary>
     internal sealed class ColorPaletteControl : Control
     {
-        private static readonly Color[] Palette =
-        {
-            Color.FromArgb(0, 0, 0), Color.FromArgb(127, 127, 127), Color.FromArgb(136, 0, 21), Color.FromArgb(237, 28, 36), Color.FromArgb(255, 127, 39),
-            Color.FromArgb(255, 242, 0), Color.FromArgb(34, 177, 76), Color.FromArgb(0, 162, 232), Color.FromArgb(63, 72, 204), Color.FromArgb(163, 73, 164),
-            Color.FromArgb(255, 255, 255), Color.FromArgb(195, 195, 195), Color.FromArgb(185, 122, 87), Color.FromArgb(255, 174, 201), Color.FromArgb(255, 201, 14),
-            Color.FromArgb(239, 228, 176), Color.FromArgb(181, 230, 29), Color.FromArgb(153, 217, 234), Color.FromArgb(112, 146, 190), Color.FromArgb(200, 191, 231)
-        };
-
         private readonly List<Color> _recent = new();
         private Color _line = Color.Red;
         private Color _fill = Color.Transparent;
-        private int _hotCell = -1;
+        private int _hotRow = -1;
+        private ToolStripDropDown _popup;
 
         /// <summary>
         /// A colour was chosen: the colour, and true for the fill colour, false for the line colour
         /// </summary>
         public event Action<Color, bool> ColorChosen;
 
+        public event Action<int> ThicknessChanged;
+
+        private readonly NumericUpDown _thickness = new() { Minimum = 0, Maximum = 100, TextAlign = HorizontalAlignment.Center, Enabled = false };
+        private bool _syncingThickness;
+
         public ColorPaletteControl()
         {
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
             Cursor = Cursors.Hand;
-            Size = new Size(LogicalToDeviceUnits(362), LogicalToDeviceUnits(66));
+            Size = new Size(LogicalToDeviceUnits(146), LogicalToDeviceUnits(80));
+            _thickness.Size = new Size(LogicalToDeviceUnits(52), LogicalToDeviceUnits(21));
+            _thickness.ValueChanged += (s, e) =>
+            {
+                if (!_syncingThickness)
+                {
+                    ThicknessChanged?.Invoke((int)_thickness.Value);
+                }
+            };
+            Controls.Add(_thickness);
+            PositionThickness();
+        }
+
+        /// <summary>
+        /// The line thickness of the tool or the selected element, in the third row; without a line the field is disabled
+        /// </summary>
+        public void SetThickness(bool available, int value)
+        {
+            _syncingThickness = true;
+            try
+            {
+                _thickness.Enabled = available;
+                _thickness.Value = Math.Max(_thickness.Minimum, Math.Min(_thickness.Maximum, value));
+            }
+            finally
+            {
+                _syncingThickness = false;
+            }
+
+            Invalidate();
+        }
+
+        private void PositionThickness()
+        {
+            var row = RowBounds(2);
+            _thickness.Location = new Point(row.Right - _thickness.Width - LogicalToDeviceUnits(4), row.Top + (row.Height - _thickness.Height) / 2);
         }
 
         public void SetColors(Color line, Color fill)
@@ -49,39 +82,22 @@ namespace Greenshot.Editor.Controls
             Invalidate();
         }
 
-        private int Cell => LogicalToDeviceUnits(18);
+        private Rectangle RowBounds(int row) => new(LogicalToDeviceUnits(2), LogicalToDeviceUnits(3) + row * LogicalToDeviceUnits(25), Width - LogicalToDeviceUnits(4), LogicalToDeviceUnits(24));
 
-        private Rectangle LineSquare => new(LogicalToDeviceUnits(6), LogicalToDeviceUnits(4), LogicalToDeviceUnits(32), LogicalToDeviceUnits(32));
-
-        private Rectangle FillSquare => new(LogicalToDeviceUnits(46), LogicalToDeviceUnits(4), LogicalToDeviceUnits(32), LogicalToDeviceUnits(32));
-
-        private Point GridOrigin => new(LogicalToDeviceUnits(90), LogicalToDeviceUnits(4));
-
-        private Rectangle MoreButton => new(LogicalToDeviceUnits(90) + 10 * (Cell + LogicalToDeviceUnits(2)) + LogicalToDeviceUnits(4), LogicalToDeviceUnits(4), LogicalToDeviceUnits(56), LogicalToDeviceUnits(46));
-
-        private Rectangle CellBounds(int index)
+        private int HitRow(Point location)
         {
-            int column = index % 10;
-            int row = index / 10;
-            return new Rectangle(GridOrigin.X + column * (Cell + LogicalToDeviceUnits(2)), GridOrigin.Y + row * (Cell + LogicalToDeviceUnits(2)), Cell, Cell);
-        }
-
-        private Color? CellColor(int index) => index < Palette.Length ? Palette[index] : index - Palette.Length < _recent.Count ? _recent[index - Palette.Length] : (Color?)null;
-
-        private int HitCell(Point location)
-        {
-            for (int i = 0; i < 30; i++)
+            for (int row = 0; row < 2; row++)
             {
-                if (CellBounds(i).Contains(location))
+                if (RowBounds(row).Contains(location))
                 {
-                    return i;
+                    return row;
                 }
             }
 
             return -1;
         }
 
-        private static void DrawSwatch(Graphics graphics, Rectangle bounds, Color color)
+        internal static void DrawSwatch(Graphics graphics, Rectangle bounds, Color color)
         {
             if (color.A == 0)
             {
@@ -104,65 +120,40 @@ namespace Greenshot.Editor.Controls
             graphics.Clear(theme.Window);
             graphics.SmoothingMode = SmoothingMode.AntiAlias;
             using var border = new Pen(theme.Border);
-            using var small = new Font(Font.FontFamily, Math.Max(7f, Font.Size - 1f));
-            foreach (var (square, color, caption) in new[] { (LineSquare, _line, "선"), (FillSquare, _fill, "채움") })
+            var thicknessRow = RowBounds(2);
+            TextRenderer.DrawText(graphics, "선 두께", Font, new Rectangle(thicknessRow.Left + LogicalToDeviceUnits(8), thicknessRow.Top, thicknessRow.Width - _thickness.Width - LogicalToDeviceUnits(12), thicknessRow.Height),
+                _thickness.Enabled ? theme.WindowText : theme.Muted, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+            for (int row = 0; row < 2; row++)
             {
-                DrawSwatch(graphics, square, color);
-                graphics.DrawRectangle(border, square);
-                TextRenderer.DrawText(graphics, caption, small, new Rectangle(square.Left - LogicalToDeviceUnits(6), square.Bottom + LogicalToDeviceUnits(2), square.Width + LogicalToDeviceUnits(12), LogicalToDeviceUnits(18)),
-                    theme.WindowText, TextFormatFlags.HorizontalCenter | TextFormatFlags.Top | TextFormatFlags.NoPrefix);
-            }
-
-            for (int i = 0; i < 30; i++)
-            {
-                var cell = CellBounds(i);
-                var color = CellColor(i);
-                if (color == null)
+                var bounds = RowBounds(row);
+                if (row == _hotRow)
                 {
-                    using var empty = new SolidBrush(theme.HotTab);
-                    graphics.FillRectangle(empty, cell);
-                    continue;
+                    using var hotBrush = new SolidBrush(theme.HotTab);
+                    graphics.FillRectangle(hotBrush, bounds);
+                    using var hotPen = new Pen(theme.Highlight);
+                    graphics.DrawRectangle(hotPen, bounds.X, bounds.Y, bounds.Width - 1, bounds.Height - 1);
                 }
 
-                DrawSwatch(graphics, cell, color.Value);
-                graphics.DrawRectangle(border, cell);
-                if (i == _hotCell)
-                {
-                    using var hot = new Pen(theme.Highlight, 2);
-                    graphics.DrawRectangle(hot, cell.Left - 1, cell.Top - 1, cell.Width + 1, cell.Height + 1);
-                }
+                var swatch = new Rectangle(bounds.Left + LogicalToDeviceUnits(6), bounds.Top + (bounds.Height - LogicalToDeviceUnits(18)) / 2, LogicalToDeviceUnits(18), LogicalToDeviceUnits(18));
+                DrawSwatch(graphics, swatch, row == 0 ? _fill : _line);
+                graphics.DrawRectangle(border, swatch);
+                TextRenderer.DrawText(graphics, row == 0 ? "채우기" : "윤곽선", Font,
+                    new Rectangle(swatch.Right + LogicalToDeviceUnits(6), bounds.Top, bounds.Width - swatch.Width - LogicalToDeviceUnits(32), bounds.Height),
+                    theme.WindowText, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis);
+                using var pen = new Pen(theme.WindowText, 1.5f);
+                int cx = bounds.Right - LogicalToDeviceUnits(12);
+                int cy = bounds.Top + bounds.Height / 2;
+                graphics.DrawLines(pen, new[] { new Point(cx - 3, cy - 1), new Point(cx, cy + 2), new Point(cx + 3, cy - 1) });
             }
-
-            var more = MoreButton;
-            if (_hotCell == 100)
-            {
-                using var hotBrush = new SolidBrush(theme.HotTab);
-                graphics.FillRectangle(hotBrush, more);
-            }
-
-            // Four dots, like the "more colours" of Paint
-            var dots = new[] { Color.FromArgb(237, 28, 36), Color.FromArgb(0, 162, 232), Color.FromArgb(34, 177, 76), Color.FromArgb(255, 127, 39) };
-            int r = LogicalToDeviceUnits(5);
-            int cx = more.Left + more.Width / 2;
-            int cy = more.Top + LogicalToDeviceUnits(14);
-            var offsets = new[] { new Point(-7, -4), new Point(5, -7), new Point(-1, 5), new Point(8, 3) };
-            for (int i = 0; i < 4; i++)
-            {
-                using var brush = new SolidBrush(dots[i]);
-                graphics.FillEllipse(brush, cx + LogicalToDeviceUnits(offsets[i].X) - r, cy + LogicalToDeviceUnits(offsets[i].Y) - r, r * 2, r * 2);
-            }
-
-            TextRenderer.DrawText(graphics, "더 보기", small, new Rectangle(more.Left, more.Top + LogicalToDeviceUnits(26), more.Width, LogicalToDeviceUnits(18)), theme.WindowText,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.Top | TextFormatFlags.NoPrefix);
         }
 
         protected override void OnMouseMove(MouseEventArgs e)
         {
             base.OnMouseMove(e);
-            int hot = MoreButton.Contains(e.Location) ? 100 : HitCell(e.Location);
-            if (hot != _hotCell)
+            int hot = HitRow(e.Location);
+            if (hot != _hotRow)
             {
-                _hotCell = hot;
+                _hotRow = hot;
                 Invalidate();
             }
         }
@@ -170,10 +161,20 @@ namespace Greenshot.Editor.Controls
         protected override void OnMouseLeave(EventArgs e)
         {
             base.OnMouseLeave(e);
-            if (_hotCell != -1)
+            if (_hotRow != -1)
             {
-                _hotCell = -1;
+                _hotRow = -1;
                 Invalidate();
+            }
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            int row = HitRow(e.Location);
+            if (row >= 0 && e.Button == MouseButtons.Left)
+            {
+                ShowPopup(row == 0);
             }
         }
 
@@ -202,32 +203,278 @@ namespace Greenshot.Editor.Controls
             }
         }
 
-        protected override void OnMouseDown(MouseEventArgs e)
+        private void ShowPopup(bool fill)
         {
-            base.OnMouseDown(e);
-            if (LineSquare.Contains(e.Location))
+            _popup?.Dispose();
+            var grid = new ColorGridPopup(fill, fill ? _fill : _line, _recent);
+            var popup = new ToolStripDropDown { Padding = Padding.Empty, Margin = Padding.Empty, AutoSize = true, DropShadowEnabled = true };
+            var host = new ToolStripControlHost(grid) { Padding = Padding.Empty, Margin = Padding.Empty, AutoSize = false, Size = grid.Size };
+            popup.Items.Add(host);
+            grid.Chosen += color =>
             {
-                PickWithDialog(false, _line);
+                popup.Close();
+                Choose(color, fill);
+            };
+            grid.MoreRequested += () =>
+            {
+                popup.Close();
+                PickWithDialog(fill, fill ? _fill : _line);
+            };
+            _popup = popup;
+            var row = RowBounds(fill ? 0 : 1);
+            var location = PointToScreen(new Point(row.Left, row.Bottom));
+            popup.Opacity = 0;
+            popup.Show(location);
+            ToolStripDropButton.Animate(popup, location);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _popup?.Dispose();
+            }
+
+            base.Dispose(disposing);
+        }
+    }
+
+    /// <summary>
+    /// The colour grid of the drop-down: theme colours with shades, standard colours, last colours, no colour, more colours
+    /// </summary>
+    internal sealed class ColorGridPopup : Control
+    {
+        private static readonly Color[] ThemeColors =
+        {
+            Color.FromArgb(255, 255, 255), Color.FromArgb(0, 0, 0), Color.FromArgb(231, 230, 230), Color.FromArgb(68, 84, 106), Color.FromArgb(68, 114, 196),
+            Color.FromArgb(237, 125, 49), Color.FromArgb(165, 165, 165), Color.FromArgb(255, 192, 0), Color.FromArgb(91, 155, 213), Color.FromArgb(112, 173, 71)
+        };
+
+        private static readonly Color[] StandardColors =
+        {
+            Color.FromArgb(192, 0, 0), Color.FromArgb(255, 0, 0), Color.FromArgb(255, 192, 0), Color.FromArgb(255, 255, 0), Color.FromArgb(146, 208, 80),
+            Color.FromArgb(0, 176, 80), Color.FromArgb(0, 176, 240), Color.FromArgb(0, 112, 192), Color.FromArgb(0, 32, 96), Color.FromArgb(112, 48, 160)
+        };
+
+        private sealed class Item
+        {
+            public Rectangle Bounds;
+            public Color? Color;
+            public string Text;
+            public bool More;
+        }
+
+        private readonly List<Item> _items = new();
+        private readonly List<(string Text, int Y)> _headers = new();
+        private readonly Color _current;
+        private Item _hot;
+
+        public event Action<Color> Chosen;
+
+        public event Action MoreRequested;
+
+        public ColorGridPopup(bool fill, Color current, IReadOnlyList<Color> recent)
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+            Cursor = Cursors.Hand;
+            _current = current;
+            int cell = LogicalToDeviceUnits(20);
+            int gap = LogicalToDeviceUnits(3);
+            int pad = LogicalToDeviceUnits(10);
+            int header = LogicalToDeviceUnits(24);
+            int y = LogicalToDeviceUnits(4);
+            int width = pad * 2 + 10 * cell + 9 * gap;
+
+            _headers.Add(("테마 색", y));
+            y += header;
+            for (int column = 0; column < 10; column++)
+            {
+                _items.Add(new Item { Bounds = new Rectangle(pad + column * (cell + gap), y, cell, cell), Color = ThemeColors[column] });
+            }
+
+            y += cell + gap * 2;
+            for (int row = 0; row < 5; row++)
+            {
+                for (int column = 0; column < 10; column++)
+                {
+                    _items.Add(new Item { Bounds = new Rectangle(pad + column * (cell + gap), y, cell, cell), Color = Shade(ThemeColors[column], row) });
+                }
+
+                y += cell + gap;
+            }
+
+            y += gap * 2;
+            _headers.Add(("표준 색", y));
+            y += header;
+            for (int column = 0; column < 10; column++)
+            {
+                _items.Add(new Item { Bounds = new Rectangle(pad + column * (cell + gap), y, cell, cell), Color = StandardColors[column] });
+            }
+
+            y += cell + gap * 2;
+            if (recent.Count > 0)
+            {
+                _headers.Add(("최근 색", y));
+                y += header;
+                for (int column = 0; column < Math.Min(10, recent.Count); column++)
+                {
+                    _items.Add(new Item { Bounds = new Rectangle(pad + column * (cell + gap), y, cell, cell), Color = recent[column] });
+                }
+
+                y += cell + gap * 2;
+            }
+
+            int rowHeight = LogicalToDeviceUnits(28);
+            _items.Add(new Item { Bounds = new Rectangle(pad / 2, y, width - pad, rowHeight), Color = Color.Transparent, Text = fill ? "채우기 없음" : "윤곽선 없음" });
+            y += rowHeight;
+            _items.Add(new Item { Bounds = new Rectangle(pad / 2, y, width - pad, rowHeight), Text = "다른 색...", More = true });
+            y += rowHeight + gap * 2;
+            Size = new Size(width, y);
+        }
+
+        /// <summary>
+        /// The shades of a theme colour like in Office: row 0..4 = lighter 80 %, 60 %, 40 %, darker 25 %, darker 50 %
+        /// (white goes darker only, black lighter only)
+        /// </summary>
+        private static Color Shade(Color color, int row)
+        {
+            if (color.ToArgb() == Color.White.ToArgb())
+            {
+                return Mix(color, Color.Black, new[] { 0.05, 0.15, 0.25, 0.35, 0.50 }[row]);
+            }
+
+            if (color.ToArgb() == Color.Black.ToArgb())
+            {
+                return Mix(color, Color.White, new[] { 0.50, 0.35, 0.25, 0.15, 0.05 }[row]);
+            }
+
+            return row switch
+            {
+                0 => Mix(color, Color.White, 0.80),
+                1 => Mix(color, Color.White, 0.60),
+                2 => Mix(color, Color.White, 0.40),
+                3 => Mix(color, Color.Black, 0.25),
+                _ => Mix(color, Color.Black, 0.50)
+            };
+        }
+
+        private static Color Mix(Color from, Color to, double amount) =>
+            Color.FromArgb((int)(from.R + (to.R - from.R) * amount), (int)(from.G + (to.G - from.G) * amount), (int)(from.B + (to.B - from.B) * amount));
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var theme = EditorTheme.Current;
+            var graphics = e.Graphics;
+            graphics.Clear(theme.Window);
+            using var border = new Pen(theme.Border);
+            using var bold = new Font(Font, FontStyle.Bold);
+            foreach (var (text, y) in _headers)
+            {
+                TextRenderer.DrawText(graphics, text, bold, new Rectangle(LogicalToDeviceUnits(10), y, Width, LogicalToDeviceUnits(22)), theme.WindowText,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+            }
+
+            foreach (var item in _items)
+            {
+                if (item.Text != null)
+                {
+                    if (item == _hot)
+                    {
+                        using var hotBrush = new SolidBrush(theme.HotTab);
+                        graphics.FillRectangle(hotBrush, item.Bounds);
+                        using var hotPen = new Pen(theme.Highlight);
+                        graphics.DrawRectangle(hotPen, item.Bounds.X, item.Bounds.Y, item.Bounds.Width - 1, item.Bounds.Height - 1);
+                    }
+
+                    var icon = new Rectangle(item.Bounds.Left + LogicalToDeviceUnits(6), item.Bounds.Top + (item.Bounds.Height - LogicalToDeviceUnits(18)) / 2, LogicalToDeviceUnits(18), LogicalToDeviceUnits(18));
+                    if (item.More)
+                    {
+                        var dots = new[] { Color.FromArgb(237, 28, 36), Color.FromArgb(0, 162, 232), Color.FromArgb(34, 177, 76), Color.FromArgb(255, 127, 39) };
+                        int half = icon.Width / 2;
+                        for (int i = 0; i < 4; i++)
+                        {
+                            using var brush = new SolidBrush(dots[i]);
+                            graphics.FillRectangle(brush, icon.Left + (i % 2) * half, icon.Top + (i / 2) * half, half - 1, half - 1);
+                        }
+                    }
+                    else
+                    {
+                        ColorPaletteControl.DrawSwatch(graphics, icon, Color.Transparent);
+                        graphics.DrawRectangle(border, icon);
+                    }
+
+                    TextRenderer.DrawText(graphics, item.Text, Font, new Rectangle(icon.Right + LogicalToDeviceUnits(8), item.Bounds.Top, item.Bounds.Width, item.Bounds.Height), theme.WindowText,
+                        TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+                    continue;
+                }
+
+                using (var brush = new SolidBrush(item.Color.Value))
+                {
+                    graphics.FillRectangle(brush, item.Bounds);
+                }
+
+                graphics.DrawRectangle(border, item.Bounds);
+                bool selected = item.Color.Value.A != 0 && _current.A != 0 && item.Color.Value.ToArgb() == _current.ToArgb();
+                if (item == _hot || selected)
+                {
+                    using var pen = new Pen(item == _hot ? theme.Highlight : theme.WindowText, 2);
+                    graphics.DrawRectangle(pen, item.Bounds.Left - 1, item.Bounds.Top - 1, item.Bounds.Width + 1, item.Bounds.Height + 1);
+                }
+            }
+
+            graphics.DrawRectangle(border, 0, 0, Width - 1, Height - 1);
+        }
+
+        private Item HitItem(Point location)
+        {
+            foreach (var item in _items)
+            {
+                if (item.Bounds.Contains(location))
+                {
+                    return item;
+                }
+            }
+
+            return null;
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            var hot = HitItem(e.Location);
+            if (hot != _hot)
+            {
+                _hot = hot;
+                Invalidate();
+            }
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            if (_hot != null)
+            {
+                _hot = null;
+                Invalidate();
+            }
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            base.OnMouseUp(e);
+            var item = HitItem(e.Location);
+            if (item == null || e.Button != MouseButtons.Left)
+            {
                 return;
             }
 
-            if (FillSquare.Contains(e.Location))
+            if (item.More)
             {
-                PickWithDialog(true, _fill);
-                return;
+                MoreRequested?.Invoke();
             }
-
-            if (MoreButton.Contains(e.Location))
+            else if (item.Color != null)
             {
-                PickWithDialog(e.Button == MouseButtons.Right, e.Button == MouseButtons.Right ? _fill : _line);
-                return;
-            }
-
-            int cell = HitCell(e.Location);
-            var color = cell >= 0 ? CellColor(cell) : null;
-            if (color != null)
-            {
-                Choose(color.Value, e.Button == MouseButtons.Right);
+                Chosen?.Invoke(item.Color.Value);
             }
         }
     }
