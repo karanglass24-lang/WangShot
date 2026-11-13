@@ -1,5 +1,5 @@
-; Greenshot Full Installer
-#define AppDisplayName "Greenshot"
+; WangShot Full Installer
+#define AppDisplayName "WangShot"
 #define OutputSuffix ""
 
 #include "includes\defines.iss"

@@ -1,10 +1,10 @@
 ; Every program file by name, no wildcards: scripts\check-core-files.ps1 fails the build when the build output has one that
 ; isn't listed here (or the other way around), so nothing a package brings along ships by accident.
 [Files]
-Source: {#ReleaseDir}\Greenshot.exe; DestDir: {app}; Components: greenshot; Flags: {#DefaultInstallFlags}
+Source: {#ReleaseDir}\WangShot.exe; DestDir: {app}; Components: greenshot; Flags: {#DefaultInstallFlags}
 Source: {#ReleaseDir}\Greenshot.Base.dll; DestDir: {app}; Components: greenshot; Flags: {#DefaultInstallFlags}
 Source: {#ReleaseDir}\Greenshot.Editor.dll; DestDir: {app}; Components: greenshot; Flags: {#DefaultInstallFlags}
-Source: {#ReleaseDir}\Greenshot.exe.config; DestDir: {app}; Components: greenshot; Flags: {#DefaultInstallFlags}
+Source: {#ReleaseDir}\WangShot.exe.config; DestDir: {app}; Components: greenshot; Flags: {#DefaultInstallFlags}
 Source: {#ReleaseDir}\log4net.dll; DestDir: {app}; Components: greenshot; Flags: {#DefaultInstallFlags}
 Source: {#ReleaseDir}\log4net.xml; DestDir: {app}; Components: greenshot; Flags: {#DefaultInstallFlags}
 Source: {#ReleaseDir}\Dapplo.Ini.dll; DestDir: {app}; Components: greenshot; Flags: {#DefaultInstallFlags}

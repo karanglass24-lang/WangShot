@@ -41,11 +41,11 @@ NotRecognizedMessagesWarning=no
 
 SetupIconFile=..\Greenshot\icons\applicationIcon\icon.ico
 #if CertumThumbprint != ""
-  OutputBaseFilename={#ExeName}{#OutputSuffix}-INSTALLER-{#VersionEnhanced}-UNSTABLE
+  OutputBaseFilename={#ExeName}{#OutputSuffix}-{#Version}-setup
   SignTool=SignTool sign /sha1 "{#CertumThumbprint}" /tr http://time.certum.pl /td sha256 /fd sha256 /v $f
   SignedUninstaller=yes
 #else
-  OutputBaseFilename={#ExeName}{#OutputSuffix}-INSTALLER-{#VersionEnhanced}-UNSTABLE-UNSIGNED
+  OutputBaseFilename={#ExeName}{#OutputSuffix}-{#Version}-setup
 #endif
 UninstallDisplayIcon={app}\{#ExeName}.exe
 Uninstallable=yes

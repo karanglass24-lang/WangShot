@@ -286,8 +286,9 @@ begin
     GreenshotCanBeRestartedByRM := False;
 
     // At this point (right before installation starts), {app} is fully initialized
-    // and we can check the version of the OLD Greenshot.exe before it gets overwritten.
-    if GetVersionNumbers(ExpandConstant('{app}\Greenshot.exe'), VersionMS, VersionLS) then
+    // and we can check the version of the OLD executable before it gets overwritten.
+    if GetVersionNumbers(ExpandConstant('{app}\{#ExeName}.exe'), VersionMS, VersionLS) or
+       GetVersionNumbers(ExpandConstant('{app}\Greenshot.exe'), VersionMS, VersionLS) then
     begin
       Major := VersionMS shr 16;
       Minor := VersionMS and $FFFF;

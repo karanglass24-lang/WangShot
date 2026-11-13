@@ -24,10 +24,10 @@ foreach ($file in $SbomFiles) {
         Copy-Item $filePath "$OutputPath" -Force
     }
 }
-# Copy greenshot.exe
-Copy-Item "$BuildArtifactsPath\Greenshot.exe" "$OutputPath" -Force
-# Copy greenshot.exe.config
-Copy-Item "$BuildArtifactsPath\Greenshot.exe.config" "$OutputPath" -Force
+# Copy WangShot.exe
+Copy-Item "$BuildArtifactsPath\WangShot.exe" "$OutputPath" -Force
+# Copy WangShot.exe.config
+Copy-Item "$BuildArtifactsPath\WangShot.exe.config" "$OutputPath" -Force
 # Copy the command line (greenshot-cli.exe) and greenshot-proxy.exe, which forwards files and URLs to Greenshot; not for Greenshot Light
 if (-not $Light) {
     Copy-Item "$BuildArtifactsPath\greenshot-cli.exe" "$OutputPath" -Force

@@ -1,4 +1,4 @@
-#define ExeName "Greenshot"
+#define ExeName "WangShot"
 ; Basic build version determined by nerdbank gitversioning, e.g. 1.2.345
 #define Version GetEnv('BuildVersionSimple')
 ; Build version with optional suffix depending on branch, e.g. 1.2.345-g1tc033174ef
@@ -16,7 +16,7 @@
 #define DefaultInstallFlags "overwritereadonly ignoreversion"
 
 #ifndef AppDisplayName
-  #define AppDisplayName "Greenshot"
+  #define AppDisplayName "WangShot"
 #endif
 
 #ifndef OutputSuffix
