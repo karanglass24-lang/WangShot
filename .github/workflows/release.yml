@@ -83,7 +83,7 @@ jobs:
     # The Release build publishes greenshot-mcp.exe next to Greenshot.exe as its last step, after the checksums, the SBOM,
     # the installers and the portable versions, so it is only in its own download
     - name: Upload MCP server artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: artifacts-greenshot-mcp
         path: src/Greenshot/bin/Release/net480/greenshot-mcp.exe
@@ -96,14 +96,14 @@ jobs:
         cp installer/WangShot-Light-*-setup.exe ${{ github.workspace }}/artifacts/
     
     - name: Upload Installer Artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
        name: artifacts-installer
        path: ${{ github.workspace }}/artifacts
        if-no-files-found: error
 
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: artifacts-greenshot-build
         path: src/Greenshot/bin/Release/net480/**
@@ -111,7 +111,7 @@ jobs:
 
     # Greenshot Light, its own build of Greenshot.exe (see Greenshot.csproj), for the Light portable version (the Light installer is built from it in the build)
     - name: Upload light build artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: artifacts-greenshot-light-build
         path: src/Greenshot/bin/Release-Light/net480/**
@@ -211,7 +211,7 @@ jobs:
         shell: pwsh
       
       - name: Upload portable build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: artifacts-greenshot-portable
           path: WangShot-*PORTABLE-*.zip
