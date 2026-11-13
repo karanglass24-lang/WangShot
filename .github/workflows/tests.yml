@@ -51,7 +51,7 @@ jobs:
 
       - name: Upload test results
         if: always()   # 테스트(또는 앞 단계) 실패해도 결과 보관
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-debug
           path: test-results.trx
