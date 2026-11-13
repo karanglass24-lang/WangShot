@@ -17,6 +17,16 @@ on:
       - 'LICENSE'
       - 'build-and-deploy.ps1'
 
+permissions:
+  # 태그·GitHub Release 생성에 필요해서 명시(기본 토큰 권한에 기대지 않도록). 조직/저장소 정책이 상한을 적용해요.
+  contents: write
+  # 참고: 하단 "Trigger GitHub Pages rebuild" 단계도 이 GITHUB_TOKEN 을 씁니다 — 필요 스코프/정책 확인.
+
+# 같은 ref 의 이전 런 취소(피드백 단축). 큐잉형이 낫으면 cancel-in-progress: false.
+concurrency:
+  group: build-and-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Build Greenshot with MSBuild
   # Upload installer to artifacts-installer
@@ -82,8 +92,8 @@ jobs:
     - name: Copy Files
       run: |
         mkdir -p ${{ github.workspace }}/artifacts
-        cp installer/Greenshot-INSTALLER-*.exe ${{ github.workspace }}/artifacts/
-        cp installer/Greenshot-Light-INSTALLER-*.exe ${{ github.workspace }}/artifacts/
+        cp installer/WangShot-*-setup.exe ${{ github.workspace }}/artifacts/
+        cp installer/WangShot-Light-*-setup.exe ${{ github.workspace }}/artifacts/
     
     - name: Upload Installer Artifact
       uses: actions/upload-artifact@v4
@@ -128,11 +138,11 @@ jobs:
         if: env.IS_MAIN_OR_RELEASE_BRANCH == 'true'
         id: version_from_filename
         run: |
-          $file = Get-ChildItem artifacts-installer -Filter "Greenshot-INSTALLER-*.exe" | Select-Object -First 1
+          $file = Get-ChildItem artifacts-installer -Filter "WangShot-*-setup.exe" | Where-Object { $_.Name -notlike "WangShot-Light-*" } | Select-Object -First 1
           if (-not $file) {
             throw "No matching file found in 'artifacts-installer' directory."
           }
-          if ($file.Name -match "Greenshot-INSTALLER-([\d\.]+(-g[\da-f]+)?)(.*)\.exe") {
+          if ($file.Name -match "^WangShot-([\d\.]+)-setup\.exe$") {
             echo "version=$($matches[1])" >> $Env:GITHUB_OUTPUT
           } else {
             throw "Version number could not be extracted from file name: $($file.Name)"
@@ -194,9 +204,9 @@ jobs:
 
       - name: Create ZIP archives
         run: |
-          $zipName = "Greenshot-PORTABLE-${{ needs.pre_deploy.outputs.version }}-UNSTABLE-UNSIGNED.zip"
+          $zipName = "WangShot-PORTABLE-${{ needs.pre_deploy.outputs.version }}.zip"
           Compress-Archive -Path "${{ github.workspace }}/portable/*" -DestinationPath $zipName -Force
-          $lightZipName = "Greenshot-Light-PORTABLE-${{ needs.pre_deploy.outputs.version }}-UNSTABLE-UNSIGNED.zip"
+          $lightZipName = "WangShot-Light-PORTABLE-${{ needs.pre_deploy.outputs.version }}.zip"
           Compress-Archive -Path "${{ github.workspace }}/portable-light/*" -DestinationPath $lightZipName -Force
         shell: pwsh
       
@@ -261,8 +271,8 @@ jobs:
         run: |
           branch="${BRANCH_NAME:-${GITHUB_REF#refs/heads/}}"
           sanitized=$(echo "$branch" | sed 's/[^a-zA-Z0-9._-]/_/g')
-          mv artifacts-installer/Greenshot-INSTALLER-*.exe "artifacts-installer/Greenshot-INSTALLER-${sanitized}.exe"
-          mv artifacts-installer/Greenshot-Light-INSTALLER-*.exe "artifacts-installer/Greenshot-Light-INSTALLER-${sanitized}.exe"
+          mv artifacts-installer/WangShot-*-setup.exe "artifacts-installer/WangShot-${sanitized}-setup.exe"
+          mv artifacts-installer/WangShot-Light-*-setup.exe "artifacts-installer/WangShot-Light-${sanitized}-setup.exe"
         shell: bash
 
       - name: Create GitHub Release
@@ -273,7 +283,8 @@ jobs:
           files: artifacts-installer/*.exe, artifacts-greenshot-portable/*.zip, artifacts-greenshot-mcp/*.zip
           generate_release_notes: true
           draft: ${{ env.IS_MAIN_OR_RELEASE_BRANCH != 'true'  }}
-          prerelease: true
+          # 메인/릴리스 브랜치 빌드는 정식 릴리스로 표시돼요. 인앱 업데이터가 prerelease 는 건너뛰기 때문이에요.
+          prerelease: ${{ env.IS_MAIN_OR_RELEASE_BRANCH != 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

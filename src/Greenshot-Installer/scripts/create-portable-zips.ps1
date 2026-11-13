@@ -4,8 +4,8 @@
 
 .DESCRIPTION
     Uses prepare-portable.ps1, like the release workflow. The ZIP files are named after the installer that was just
-    built: Greenshot-INSTALLER-<version>.exe gives Greenshot-PORTABLE-<version>.zip and Greenshot-Light-PORTABLE-<version>.zip.
-    Greenshot Light is its own build of Greenshot.exe (bin\Release-Light, see Greenshot.csproj).
+    built: WangShot-<version>-setup.exe gives WangShot-PORTABLE-<version>.zip and WangShot-Light-PORTABLE-<version>.zip.
+    WangShot Light is its own build of WangShot.exe (bin\Release-Light, see Greenshot.csproj).
 #>
 param(
     [Parameter(Mandatory = $true)]
@@ -20,15 +20,18 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$installer = Get-ChildItem -Path $InstallerDir -Filter 'Greenshot-INSTALLER-*.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+$installer = Get-ChildItem -Path $InstallerDir -Filter 'WangShot-*-setup.exe' | Where-Object { $_.Name -notlike 'WangShot-Light-*' } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if (-not $installer) {
-    throw "No Greenshot-INSTALLER-*.exe found in $InstallerDir"
+    throw "No WangShot-*-setup.exe found in $InstallerDir"
 }
-$version = $installer.BaseName.Substring('Greenshot-INSTALLER-'.Length)
+if ($installer.BaseName -notmatch '^WangShot-(?<version>.+)-setup$') {
+    throw "Could not read the version from $($installer.Name)"
+}
+$version = $Matches['version']
 
 $prepareScript = Join-Path $RepositoryRootPath 'prepare-portable.ps1'
-foreach ($edition in @(@{ Prefix = 'Greenshot'; Light = $false; Path = $BuildArtifactsPath }, @{ Prefix = 'Greenshot-Light'; Light = $true; Path = $LightBuildArtifactsPath })) {
-    $staging = Join-Path ([System.IO.Path]::GetTempPath()) ("greenshot-portable-" + [guid]::NewGuid().ToString('N'))
+foreach ($edition in @(@{ Prefix = 'WangShot'; Light = $false; Path = $BuildArtifactsPath }, @{ Prefix = 'WangShot-Light'; Light = $true; Path = $LightBuildArtifactsPath })) {
+    $staging = Join-Path ([System.IO.Path]::GetTempPath()) ("wangshot-portable-" + [guid]::NewGuid().ToString('N'))
     try {
         & $prepareScript -RepositoryRootPath $RepositoryRootPath -BuildArtifactsPath $edition.Path -OutputPath $staging -Light:$edition.Light
         $zip = Join-Path $InstallerDir ("{0}-PORTABLE-{1}.zip" -f $edition.Prefix, $version)

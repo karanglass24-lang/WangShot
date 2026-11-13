@@ -36,7 +36,7 @@ jobs:
           echo "Running for $TAG"
           $url = "https://api.github.com/repos/greenshot/greenshot/releases/tags/$TAG"
           $release = Invoke-RestMethod -Uri $url
-          $asset = $release.assets | Where-Object { $_.name -like 'Greenshot-INSTALLER-*.exe' }
+          $asset = $release.assets | Where-Object { $_.name -like 'WangShot-*-setup.exe' }
           if (-not $asset) { throw "No matching asset found!" }
           $checksumType, $checksum = $asset.digest -split ":"
 

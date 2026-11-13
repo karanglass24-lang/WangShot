@@ -6,7 +6,7 @@
 #define AutostartParameters 'advpack.dll,LaunchINFSectionEx ""{app}\autostart.inf"",DefaultInstall,,4'
 
 #ifdef IsLightEdition
-  #define FileOpener "Greenshot.exe"
+  #define FileOpener "WangShot.exe"
 #else
   #define FileOpener "greenshot-proxy.exe"
 #endif
@@ -71,12 +71,12 @@ Root: HKA; Subkey: Software\Classes\Applications\greenshot-proxy.exe; Flags: del
 Root: HKA; Subkey: Software\Classes\.greenshot; ValueType: string; ValueName: ""; ValueData: "Greenshot.File"; Flags: uninsdeletevalue uninsdeletekeyifempty noerror
 Root: HKA; Subkey: Software\Classes\.greenshot\OpenWithProgids; ValueType: string; ValueName: "Greenshot.File"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty noerror
 Root: HKA; Subkey: Software\Classes\Greenshot.File; ValueType: string; ValueName: ""; ValueData: "Greenshot File"; Flags: uninsdeletekey noerror
-Root: HKA; Subkey: Software\Classes\Greenshot.File\DefaultIcon; ValueType: string; ValueName: ""; ValueData: """{app}\Greenshot.exe"",0"; Flags: noerror
+Root: HKA; Subkey: Software\Classes\Greenshot.File\DefaultIcon; ValueType: string; ValueName: ""; ValueData: """{app}\{#ExeName}.exe"",0"; Flags: noerror
 Root: HKA; Subkey: Software\Classes\Greenshot.File\shell\open\command; ValueType: string; ValueName: ""; ValueData: """{app}\{#FileOpener}"" --file ""%1"""; Flags: noerror
 ; Greenshot.Image: the image formats Greenshot can open. Greenshot is only added to "Open with" of these types, it does not take
 ; over their default application; the user can choose Greenshot as default in Settings > Default apps (see Capabilities below).
 Root: HKA; Subkey: Software\Classes\Greenshot.Image; ValueType: string; ValueName: ""; ValueData: "Image (Greenshot)"; Flags: uninsdeletekey noerror
-Root: HKA; Subkey: Software\Classes\Greenshot.Image\DefaultIcon; ValueType: string; ValueName: ""; ValueData: """{app}\Greenshot.exe"",0"; Flags: noerror
+Root: HKA; Subkey: Software\Classes\Greenshot.Image\DefaultIcon; ValueType: string; ValueName: ""; ValueData: """{app}\{#ExeName}.exe"",0"; Flags: noerror
 Root: HKA; Subkey: Software\Classes\Greenshot.Image\shell\open; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "Greenshot"; Flags: noerror
 Root: HKA; Subkey: Software\Classes\Greenshot.Image\shell\open\command; ValueType: string; ValueName: ""; ValueData: """{app}\{#FileOpener}"" --file ""%1"""; Flags: noerror
 Root: HKA; Subkey: Software\Classes\.png\OpenWithProgids; ValueType: string; ValueName: "Greenshot.Image"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty noerror
@@ -97,7 +97,7 @@ Root: HKA; Subkey: Software\Classes\.tga\OpenWithProgids; ValueType: string; Val
 
 ; "Open with > Choose another app": shows the proxy (Light: Greenshot.exe) as "Greenshot", only for the supported types
 Root: HKA; Subkey: Software\Classes\Applications\{#FileOpener}; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "Greenshot"; Flags: uninsdeletekey noerror
-Root: HKA; Subkey: Software\Classes\Applications\{#FileOpener}\DefaultIcon; ValueType: string; ValueName: ""; ValueData: """{app}\Greenshot.exe"",0"; Flags: noerror
+Root: HKA; Subkey: Software\Classes\Applications\{#FileOpener}\DefaultIcon; ValueType: string; ValueName: ""; ValueData: """{app}\{#ExeName}.exe"",0"; Flags: noerror
 Root: HKA; Subkey: Software\Classes\Applications\{#FileOpener}\shell\open\command; ValueType: string; ValueName: ""; ValueData: """{app}\{#FileOpener}"" --file ""%1"""; Flags: noerror
 Root: HKA; Subkey: Software\Classes\Applications\{#FileOpener}\SupportedTypes; ValueType: string; ValueName: ".greenshot"; ValueData: ""; Flags: noerror
 Root: HKA; Subkey: Software\Classes\Applications\{#FileOpener}\SupportedTypes; ValueType: string; ValueName: ".png"; ValueData: ""; Flags: noerror
@@ -119,7 +119,7 @@ Root: HKA; Subkey: Software\Classes\Applications\{#FileOpener}\SupportedTypes; V
 ; Settings > Default apps: lets the user make Greenshot the default application for these types
 Root: HKA; Subkey: Software\Greenshot\Capabilities; ValueType: string; ValueName: "ApplicationName"; ValueData: "Greenshot"; Flags: uninsdeletekey noerror
 Root: HKA; Subkey: Software\Greenshot\Capabilities; ValueType: string; ValueName: "ApplicationDescription"; ValueData: "Screenshot tool: opens images in the Greenshot editor or runs your recipes on them"; Flags: noerror
-Root: HKA; Subkey: Software\Greenshot\Capabilities; ValueType: string; ValueName: "ApplicationIcon"; ValueData: """{app}\Greenshot.exe"",0"; Flags: noerror
+Root: HKA; Subkey: Software\Greenshot\Capabilities; ValueType: string; ValueName: "ApplicationIcon"; ValueData: """{app}\{#ExeName}.exe"",0"; Flags: noerror
 Root: HKA; Subkey: Software\Greenshot\Capabilities\FileAssociations; ValueType: string; ValueName: ".greenshot"; ValueData: "Greenshot.File"; Flags: noerror
 Root: HKA; Subkey: Software\Greenshot\Capabilities\FileAssociations; ValueType: string; ValueName: ".png"; ValueData: "Greenshot.Image"; Flags: noerror
 Root: HKA; Subkey: Software\Greenshot\Capabilities\FileAssociations; ValueType: string; ValueName: ".jpg"; ValueData: "Greenshot.Image"; Flags: noerror

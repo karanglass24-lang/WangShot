@@ -2,7 +2,7 @@
 ; Greenshot.exe (built with /p:GreenshotEdition=Light, which compiles that code out, see Greenshot.csproj).
 #define IsLightEdition 1
 #define ReleaseDir "..\Greenshot\bin\Release-Light\net480"
-#define AppDisplayName "Greenshot Light"
+#define AppDisplayName "WangShot Light"
 #define OutputSuffix "-Light"
 
 #include "includes\defines.iss"
