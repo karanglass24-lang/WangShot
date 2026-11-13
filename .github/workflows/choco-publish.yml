@@ -27,7 +27,7 @@ jobs:
 
       # 1. Checkout repository. needed for nuspec etc
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # 2. Update nuspec and chocolateyInstall.ps1
       - name: Get asset digest from GitHub API
