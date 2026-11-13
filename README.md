@@ -20,13 +20,30 @@
 
 ## 빌드
 
-.NET 10 SDK 와 .NET Framework 4.8 개발자 팩이 필요해요.
+Windows + **Visual Studio 2026**(Desktop development with C++ 워크로드 — MSVC v145 x64/x86 빌드 도구, Windows 10 SDK 포함) 또는 그에 준하는 **MSBuild/Build Tools** + **.NET Framework 4.8 개발자 팩**이 필요해요. 솔루션 생성 태스크(`Greenshot.BuildTasks`)와 `greenshot-proxy`(C++) 때문에 **Visual Studio의 MSBuild**로 빌드하는 게 정석이고, `dotnet build`/`dotnet msbuild`는 이 솔루션에서 그대로 믿기 어렵다는 게 저장소 자체 문서의 정리예요(`.github/copilot-instructions.md`의 빌드 요건·'Issue 1' 참고). 그리고 `src/global.json` 기준으로 **.NET 10 SDK**도 필요해요(`rollForward: latestMajor`, Greenshot.Mcp가 net10.0-windows 대상).
 
-```
-dotnet build src/Greenshot/Greenshot.csproj -c Release
+전체 솔루션 — CI·릴리스와 동일:
+
+```powershell
+msbuild src/Greenshot.sln /p:Configuration=Release /t:Rebuild /v:normal
 ```
 
-결과: `src/Greenshot/bin/Release/net480/WangShot.exe`
+- 디버깅: `/p:Configuration=Debug` · Light 에디션: `DebugLight`/`ReleaseLight` 구성 또는 `/p:GreenshotEdition=Light`
+- 단일 프로젝트만 빠르게 확인할 때 `dotnet build`를 쓰는 경우도 있지만(저장소의 `README.greenshot.md`가 Light 경로를 예시로 듦), 릴리스 검증 기준선은 위 MSBuild 경로예요.
+
+결과물: `src/Greenshot/bin/Release/net480/WangShot.exe` (플러그인 `Plugins/`, 언어팩 `Languages/`)
+
+## Known vulnerability warnings (알려진 취약점 경고)
+
+릴리스 빌드는 NuGet 감사(NuGetAudit) 경고 5건을 **의도적으로 억제**하고 있어요 — 전부 `SixLabors.ImageSharp`(현재 2.1.13 고정) 관련이고, 사유·재검토 조건은 `src/Directory.Build.props`의 `NuGetAuditSuppress` 주석이 원본이에요. 2026-10-07 공개된 공지들이고, 작성 시점 기준 **알려진 실제 악용 정황은 없음**이에요.
+
+- **GHSA-gwg2-r3hj-4w44** (CVE-2026-106114, CVSS 5.3) — ICC 프로필 CLUT 파싱이 값 검증 전에 대용량 할당. [공지](https://github.com/SixLabors/ImageSharp/security/advisories/GHSA-gwg2-r3hj-4w44)
+- **GHSA-j3p4-wp97-rph4** (CVE-2026-106113, CVSS 7.5) — `HistogramEqualization` 이 검증 안 된 휘도 값을 히스토그램 인덱스로 사용. [공지](https://github.com/SixLabors/ImageSharp/security/advisories/GHSA-j3p4-wp97-rph4)
+- **GHSA-j9gm-c75j-xc9q** (CVE-2026-106110, CVSS 7.5) — TIFF CCITT T4 인코더가 압축 버퍼를 초과해 기록. [공지](https://github.com/SixLabors/ImageSharp/security/advisories/GHSA-j9gm-c75j-xc9q)
+- **GHSA-jjfr-hcj7-qf5w** (CVE-2026-106115, CVSS 7.5) — TIFF CCITT T6 인코더가 압축 버퍼를 초과해 기록. [공지](https://github.com/SixLabors/ImageSharp/security/advisories/GHSA-jjfr-hcj7-qf5w)
+- **GHSA-wmxv-xphr-5c9g** (CVE-2026-106116, CVSS 5.3) — BigTIFF IFD 엔트리 수 미검증으로 입력이 안 줄어도 도는 루프. [공지](https://github.com/SixLabors/ImageSharp/security/advisories/GHSA-wmxv-xphr-5c9g)
+
+패치 버전은 4.1.2 / 3.2.0 라인인데 net480 지원 여부가 관건이라, 그걸 만족하는 버전이 나오면 올리고 이 억제들을 지우면 돼요.
 
 ## 라이선스
 

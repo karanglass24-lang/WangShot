@@ -1,0 +1,59 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+      - 'release/**'
+  pull_request:
+  workflow_dispatch:
+  # 다른 브랜치(feature/** 등)에도 돌리려면 push 아래에 추가하세요.
+
+# Windows 전용: WPF/WinForms + net480 앱이고, 테스트가 캡처/에디터 컴포넌트를 겨눠요.
+# 호스팅 러너는 잠금·비활성 인터랙티브 세션이라 데스크톱/클립보드 의존 테스트는 최대한 스킵돼요
+# (기준: .github/copilot-instructions.md "Run the Tests"). 첫 런에서 이 저장소 테스트셋 실제 결과 확인 권장.
+# 로컬 반복 실행은 tools/build-runner (Start-BuildRunner.ps1) 가 빌드/테스트를 request 파일로 구동해요.
+
+permissions:
+  contents: read   # 최소 권한: 체크아웃 + 테스트 실행. 여기선 쓸 게 없어요.
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true   # 같은 ref 이전 런 취소. 큐잉형이면 이 줄만 지우기.
+
+jobs:
+  test:
+    name: Tests (Debug)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        # Nerdbank.GitVersioning 이 git 이력을 필요로 해요 — full history(샤 shallow 면 --unshallow).
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'   # release.yml 과 동일
+
+      - name: Setup MSBuild
+        # release.yml 과 동일 액션. 솔루션에 MSBuild 전용 태스크 + C++ 프로젝트가 있어요.
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Restore & build (Debug)
+        run: msbuild src/Greenshot.sln /p:Configuration=Debug /t:Build /restore /v:minimal
+
+      - name: Run tests (no rebuild)
+        # 첫 실행에서 데스크톱 의존 테스트의 스킵 여부 확인.
+        run: 'dotnet test src/Greenshot.Tests/Greenshot.Tests.csproj --configuration Debug --no-build --nologo --logger "trx;LogFileName=test-results.trx"'
+
+      - name: Upload test results
+        if: always()   # 테스트(또는 앞 단계) 실패해도 결과 보관
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-debug
+          path: test-results.trx
+          if-no-files-found: warn
+          retention-days: 7

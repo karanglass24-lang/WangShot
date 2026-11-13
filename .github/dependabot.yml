@@ -1,0 +1,14 @@
+version: 2
+# Weekly version updates: GitHub Actions + NuGet packages (entrypoint: src/Greenshot.sln).
+# 시작점(stter) — schedule/directory/limits 는 취향껏 조정. multi-project/net480 레이아웃이라
+# NuGet 은 best-effort 로 보고 첫 결과 확인 권장.
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: nuget
+    directory: /src
+    schedule:
+      interval: weekly
