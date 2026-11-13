@@ -214,7 +214,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: artifacts-greenshot-portable
-          path: Greenshot-*PORTABLE-*.zip
+          path: WangShot-*PORTABLE-*.zip
           if-no-files-found: error
 
   deploy:
@@ -278,7 +278,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "Greenshot ${{ needs.pre_deploy.outputs.version }} (continuous build)"
+          name: "왕샷 (WangShot) ${{ needs.pre_deploy.outputs.version }} (continuous build)"
           tag_name: ${{ needs.pre_deploy.outputs.tag_name }}
           files: artifacts-installer/*.exe, artifacts-greenshot-portable/*.zip, artifacts-greenshot-mcp/*.zip
           generate_release_notes: true
