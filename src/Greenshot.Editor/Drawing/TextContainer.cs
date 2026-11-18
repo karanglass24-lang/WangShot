@@ -59,11 +59,26 @@ namespace Greenshot.Editor.Drawing
         [NonSerialized] private TextBox _textBox;
 
         /// <summary>
+        /// 이벤트: 텍스트 편집 시작 시 발생
+        /// </summary>
+        public event EventHandler TextEditingStarted;
+
+        /// <summary>
+        /// 이벤트: 텍스트 편집 종료 시 발생
+        /// </summary>
+        public event EventHandler TextEditingEnded;
+
+        /// <summary>
         /// The StringFormat object is not serializable!!
         /// </summary>
         [NonSerialized] private StringFormat _stringFormat = new StringFormat();
 
         public StringFormat StringFormat => _stringFormat;
+
+        /// <summary>
+        /// 현재 텍스트 편집 중인지 여부
+        /// </summary>
+        public bool IsEditing => _textBox != null && _textBox.Visible;
 
         // Although the name is wrong, we can't change it due to file serialization
         // ReSharper disable once InconsistentNaming
@@ -314,6 +329,9 @@ namespace Greenshot.Editor.Drawing
                 _textBox.Show();
                 _textBox.Focus();
             }
+
+            // 텍스트 편집 시작 이벤트 발생
+            TextEditingStarted?.Invoke(this, EventArgs.Empty);
         }
 
         /// <summary>
@@ -351,6 +369,9 @@ namespace Greenshot.Editor.Drawing
             {
                 InternalParent.Controls.Remove(_textBox);
             }
+
+            // 텍스트 편집 종료 이벤트 발생
+            TextEditingEnded?.Invoke(this, EventArgs.Empty);
         }
 
         /// <summary>

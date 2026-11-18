@@ -3267,13 +3267,42 @@ namespace Greenshot.Editor.Forms
                 // The cut edges are for crop and crop out, or for selected cut or torn edges
                 cutMarkLabel.Visible = cutMarkStyleButton.Visible = props.HasFieldValue(FieldType.CUT_MARK_STYLE);
                 highlightModeButton.Visible = props.HasFieldValue(FieldType.PREPARED_FILTER_HIGHLIGHT);
+
+                // 왕샷: 텍스트 편집 중이면 서식 컨텍스트 탭 표시
+                UpdateFormatContextTab();
             }
             else
             {
                 HideToolstripItems();
+                // 선택된 요소 없으면 서식 탭 숨김
+                if (_ribbon != null && _formatTabIndex >= 0)
+                {
+                    _ribbon.SetTabVisible(_formatTabIndex, false);
+                }
             }
 
             propertiesToolStrip.ResumeLayout();
+        }
+
+        /// <summary>
+        /// 왕샷: 서식 컨텍스트 탭 표시/숨김 업데이트
+        /// </summary>
+        private void UpdateFormatContextTab()
+        {
+            if (_ribbon == null || _formatTabIndex < 0) return;
+
+            bool hasTextEditing = _surface.SelectedElements?.OfType<TextContainer>().Any(t => t.IsEditing) == true;
+            bool currentlyVisible = _ribbon.IsTabVisible(_formatTabIndex);
+
+            if (hasTextEditing != currentlyVisible)
+            {
+                _ribbon.SetTabVisible(_formatTabIndex, hasTextEditing);
+                // 텍스트 편집 시작 시 서식 탭으로 자동 전환 (선택 사항)
+                if (hasTextEditing && _ribbon.IsTabVisible(_formatTabIndex))
+                {
+                    _ribbon.SelectTab(_formatTabIndex);
+                }
+            }
         }
 
         private void HideToolstripItems()

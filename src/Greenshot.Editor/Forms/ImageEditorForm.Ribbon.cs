@@ -11,6 +11,7 @@ using Greenshot.Base.Interfaces;
 using Greenshot.Editor.Controls;
 using Greenshot.Editor.Drawing;
 using Greenshot.Editor.Drawing.Fields;
+using Greenshot.Editor.Drawing.Fields.Binding;
 
 namespace Greenshot.Editor.Forms
 {
@@ -33,6 +34,8 @@ namespace Greenshot.Editor.Forms
         // 왕샷: the panel with the recent captures, left of the canvas
         private RecentCapturesPanel _recentCapturesPanel;
         private ToolStripButton _recentCapturesButton;
+        // 왕샷: 서식 컨텍스트 탭 인덱스
+        private int _formatTabIndex = -1;
 
         /// <summary>
         /// Put the buttons into groups, make the ribbon the only tool bar above the canvas
@@ -51,6 +54,18 @@ namespace Greenshot.Editor.Forms
             int obj = _ribbon.AddTab("개체");          // 개체 (전문 편집)
             int view = _ribbon.AddTab("보기");         // 보기
             int export = _ribbon.AddTab("내보내기");    // 공유 → 내보내기
+            // 왕샷: 컨텍스트 탭 - 텍스트 편집 시에만 표시되는 "서식" 탭
+            _formatTabIndex = _ribbon.AddTab("서식");
+            _ribbon.SetTabVisible(_formatTabIndex, false); // 기본적으로 숨김
+
+            // 왕샷: KeyTip 설정 (Alt 키로 활성화되는 단축키)
+            _ribbon.SetTabKeyTip(file, "F");      // 파일
+            _ribbon.SetTabKeyTip(edit, "H");      // 편집 (Home)
+            _ribbon.SetTabKeyTip(annotation, "A"); // 주석 (Annotation)
+            _ribbon.SetTabKeyTip(obj, "O");       // 개체 (Object)
+            _ribbon.SetTabKeyTip(view, "V");      // 보기 (View)
+            _ribbon.SetTabKeyTip(export, "E");    // 내보내기 (Export)
+            _ribbon.SetTabKeyTip(_formatTabIndex, "T"); // 서식 (Text format)
 
             // ============================================================
             // 파일 탭
@@ -64,6 +79,10 @@ namespace Greenshot.Editor.Forms
                 (saveAs, null),
                 (NewAction("PDF로 저장", "이미지를 PDF 파일로 저장해요", "pdfFile.Image", (s, e) => SaveAsPdf()), null));
             AddRibbonGroup(file, "창", (Proxy(closeToolStripMenuItem, "닫기 (Ctrl+W)"), null));
+
+            // 왕샷: 파일 탭 그룹 KeyTips
+            _ribbon.SetGroupKeyTip(file, 0, "F"); // 파일
+            _ribbon.SetGroupKeyTip(file, 1, "W"); // 창
 
             // ============================================================
             // 편집 탭 (주 작업) - 그리기 도구 / 강조 도구 / 이미지 / 색상·속성
@@ -141,6 +160,13 @@ namespace Greenshot.Editor.Forms
             }
             _ribbon.AddPaletteGroup(edit, "색상 · 속성", _palette, propertiesToolStrip);
 
+            // 왕샷: 편집 탭 그룹 KeyTips
+            _ribbon.SetGroupKeyTip(edit, 0, "C"); // 클립보드
+            _ribbon.SetGroupKeyTip(edit, 1, "D"); // 그리기 도구
+            _ribbon.SetGroupKeyTip(edit, 2, "E"); // 강조 도구
+            _ribbon.SetGroupKeyTip(edit, 3, "I"); // 이미지
+            _ribbon.SetGroupKeyTip(edit, 4, "P"); // 색상 · 속성
+
             // ============================================================
             // 주석 탭 (교재 작성 특화) - 텍스트 / 강조 / 가리기 / 스탬프 / 정렬·스타일
             // ============================================================
@@ -191,6 +217,13 @@ namespace Greenshot.Editor.Forms
             AddRibbonGroup(annotation, "정렬 · 스타일",
                 (alignTool, "정렬"), (quickStyleTool, "퀵 스타일"), (formatPainter, null));
 
+            // 왕샷: 주석 탭 그룹 KeyTips
+            _ribbon.SetGroupKeyTip(annotation, 0, "T"); // 텍스트
+            _ribbon.SetGroupKeyTip(annotation, 1, "H"); // 강조
+            _ribbon.SetGroupKeyTip(annotation, 2, "Q"); // 가리기
+            _ribbon.SetGroupKeyTip(annotation, 3, "S"); // 스탬프
+            _ribbon.SetGroupKeyTip(annotation, 4, "A"); // 정렬·스타일
+
             // ============================================================
             // 개체 탭 (전문 편집) - 순서 / 변형 / 그룹 / 파일
             // ============================================================
@@ -228,6 +261,12 @@ namespace Greenshot.Editor.Forms
                 (ProxyIcon(loadElementsToolStripMenuItem, "개체 불러오기 (Ctrl+Shift+O)", "openFile.Image"), null),
                 (NewAction("템플릿으로 저장", "현재 개체들을 템플릿으로 저장", "template.Image", (s, e) => SaveAsTemplate()), null));
 
+            // 왕샷: 개체 탭 그룹 KeyTips
+            _ribbon.SetGroupKeyTip(obj, 0, "O"); // 순서
+            _ribbon.SetGroupKeyTip(obj, 1, "T"); // 변형
+            _ribbon.SetGroupKeyTip(obj, 2, "G"); // 그룹
+            _ribbon.SetGroupKeyTip(obj, 3, "F"); // 개체 파일
+
             // ============================================================
             // 보기 탭 - 확대/축소 / 표시 / 레이아웃
             // ============================================================
@@ -257,6 +296,11 @@ namespace Greenshot.Editor.Forms
             );
             AddRibbonGroup(view, "레이아웃", (layoutTool, "캔버스"));
 
+            // 왕샷: 보기 탭 그룹 KeyTips
+            _ribbon.SetGroupKeyTip(view, 0, "Z"); // 확대/축소
+            _ribbon.SetGroupKeyTip(view, 1, "D"); // 표시
+            _ribbon.SetGroupKeyTip(view, 2, "L"); // 레이아웃
+
             // ============================================================
             // 내보내기 탭 - 복사 / 보내기 / 자동화
             // ============================================================
@@ -269,6 +313,11 @@ namespace Greenshot.Editor.Forms
             AddRibbonGroup(export, "자동화",
                 (NewAction("스크롤 캡처", "스크롤 캡처 (Ctrl+Alt+S) - 마우스 아래 창 자동 스크롤 캡처", "scrollCapture.Image", (s, e) => SimpleServiceProvider.Current.GetInstance<IGreenshotShell>().StartScrollCapture()), null),
                 (NewAction("배치 처리", "여러 이미지 일괄 처리", "batch.Image", (s, e) => ShowBatchDialog()), null));
+
+            // 왕샷: 내보내기 탭 그룹 KeyTips
+            _ribbon.SetGroupKeyTip(export, 0, "C"); // 클립보드
+            _ribbon.SetGroupKeyTip(export, 1, "S"); // 보내기
+            _ribbon.SetGroupKeyTip(export, 2, "A"); // 자동화
 
             // 기본 탭: 편집 (주 작업)
             _ribbon.SelectTab(edit);
@@ -297,6 +346,11 @@ namespace Greenshot.Editor.Forms
                 item.DisplayStyle = ToolStripItemDisplayStyle.Image;
                 item.Margin = new Padding(1, 1, 1, 1);
             }
+
+            // ============================================================
+            // 서식 탭 (컨텍스트 탭) - 텍스트 편집 시에만 표시
+            // ============================================================
+            CreateFormatTab(_formatTabIndex);
 
             // The menu bar stays (shortcut keys) but out of sight
             _ribbon.HostMenu(menuStrip1);
@@ -383,6 +437,163 @@ namespace Greenshot.Editor.Forms
         {
             _surface.DrawingMode = drawingMode;
             RefreshFieldControls();
+        }
+
+        /// <summary>
+        /// 왕샷: 텍스트 서식 컨텍스트 탭 생성
+        /// </summary>
+        private void CreateFormatTab(int tabIndex)
+        {
+            // 글꼴 그룹
+            var fontGroup = _ribbon.AddGroup(tabIndex, "글꼴");
+
+            // 글꼴 패밀리 콤보박스 (ToolStripComboBox 상속)
+            var formatFontFamilyComboBox = new FontFamilyComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                MaxDropDownItems = 20,
+                Width = 180,
+                Padding = new Padding(2, 0, 0, 2)
+            };
+            formatFontFamilyComboBox.GotFocus += ToolBarFocusableElementGotFocus;
+            formatFontFamilyComboBox.LostFocus += ToolBarFocusableElementLostFocus;
+            formatFontFamilyComboBox.PropertyChanged += FontPropertyChanged;
+            fontGroup.Items.Add(formatFontFamilyComboBox);
+
+            // 글꼴 크기
+            var formatFontSizeUpDown = new ToolStripNumericUpDown
+            {
+                DecimalPlaces = 0,
+                Minimum = 1,
+                Maximum = 200,
+                Width = 60,
+                ToolTipText = "글꼴 크기"
+            };
+            formatFontSizeUpDown.GotFocus += ToolBarFocusableElementGotFocus;
+            formatFontSizeUpDown.LostFocus += ToolBarFocusableElementLostFocus;
+            fontGroup.Items.Add(formatFontSizeUpDown);
+
+            // 굵게/기울임꼴
+            var formatFontBoldButton = new BindableToolStripButton
+            {
+                CheckOnClick = true,
+                ToolTipText = "굵게 (Ctrl+B)",
+                DisplayStyle = ToolStripItemDisplayStyle.Image
+            };
+            IconBinder.Bind(formatFontBoldButton, IconSource.FromResource(typeof(ImageEditorForm), "fontBoldButton.Image"));
+            fontGroup.Items.Add(formatFontBoldButton);
+
+            var formatFontItalicButton = new BindableToolStripButton
+            {
+                CheckOnClick = true,
+                ToolTipText = "기울임꼴 (Ctrl+I)",
+                DisplayStyle = ToolStripItemDisplayStyle.Image
+            };
+            IconBinder.Bind(formatFontItalicButton, IconSource.FromResource(typeof(ImageEditorForm), "fontItalicButton.Image"));
+            fontGroup.Items.Add(formatFontItalicButton);
+
+            // 정렬 그룹 (드롭다운 버튼 사용)
+            var alignmentGroup = _ribbon.AddGroup(tabIndex, "정렬");
+
+            var formatTextHorizontalAlignmentButton = new BindableToolStripDropDownButton
+            {
+                ToolTipText = "가로 정렬",
+                DisplayStyle = ToolStripItemDisplayStyle.Image
+            };
+            IconBinder.Bind(formatTextHorizontalAlignmentButton, IconSource.FromResource(typeof(ImageEditorForm), "textAlignCenterButton.Image"));
+            // 드롭다운 메뉴 구성
+            formatTextHorizontalAlignmentButton.DropDownItems.Add(
+                CreateAlignmentMenuItem("왼쪽", StringAlignment.Near, formatTextHorizontalAlignmentButton));
+            formatTextHorizontalAlignmentButton.DropDownItems.Add(
+                CreateAlignmentMenuItem("가운데", StringAlignment.Center, formatTextHorizontalAlignmentButton));
+            formatTextHorizontalAlignmentButton.DropDownItems.Add(
+                CreateAlignmentMenuItem("오른쪽", StringAlignment.Far, formatTextHorizontalAlignmentButton));
+            alignmentGroup.Items.Add(formatTextHorizontalAlignmentButton);
+
+            var formatTextVerticalAlignmentButton = new BindableToolStripDropDownButton
+            {
+                ToolTipText = "세로 정렬",
+                DisplayStyle = ToolStripItemDisplayStyle.Image
+            };
+            IconBinder.Bind(formatTextVerticalAlignmentButton, IconSource.FromResource(typeof(ImageEditorForm), "textAlignMiddleButton.Image"));
+            formatTextVerticalAlignmentButton.DropDownItems.Add(
+                CreateAlignmentMenuItem("위쪽", StringAlignment.Near, formatTextVerticalAlignmentButton));
+            formatTextVerticalAlignmentButton.DropDownItems.Add(
+                CreateAlignmentMenuItem("가운데", StringAlignment.Center, formatTextVerticalAlignmentButton));
+            formatTextVerticalAlignmentButton.DropDownItems.Add(
+                CreateAlignmentMenuItem("아래쪽", StringAlignment.Far, formatTextVerticalAlignmentButton));
+            alignmentGroup.Items.Add(formatTextVerticalAlignmentButton);
+
+            // 스타일 그룹
+            var styleGroup = _ribbon.AddGroup(tabIndex, "스타일");
+
+            var formatShadowButton = new BindableToolStripButton
+            {
+                CheckOnClick = true,
+                ToolTipText = "그림자",
+                DisplayStyle = ToolStripItemDisplayStyle.Image
+            };
+            IconBinder.Bind(formatShadowButton, IconSource.FromResource(typeof(ImageEditorForm), "shadowButton.Image"));
+            styleGroup.Items.Add(formatShadowButton);
+
+            // 테두리/채우기 그룹
+            var borderFillGroup = _ribbon.AddGroup(tabIndex, "테두리/채우기");
+
+            var formatLineColorButton = new ToolStripColorButton { ToolTipText = "테두리 색" };
+            IconBinder.Bind(formatLineColorButton, IconSource.FromResource(typeof(ImageEditorForm), "lineColorButton.Image"));
+            borderFillGroup.Items.Add(formatLineColorButton);
+
+            var formatFillColorButton = new ToolStripColorButton { ToolTipText = "채우기 색" };
+            IconBinder.Bind(formatFillColorButton, IconSource.FromResource(typeof(ImageEditorForm), "fillColorButton.Image"));
+            borderFillGroup.Items.Add(formatFillColorButton);
+
+            var formatLineThicknessUpDown = new ToolStripNumericUpDown
+            {
+                DecimalPlaces = 0,
+                Minimum = 0,
+                Maximum = 50,
+                Width = 60,
+                ToolTipText = "테두리 두께"
+            };
+            formatLineThicknessUpDown.GotFocus += ToolBarFocusableElementGotFocus;
+            formatLineThicknessUpDown.LostFocus += ToolBarFocusableElementLostFocus;
+            borderFillGroup.Items.Add(formatLineThicknessUpDown);
+
+            // 데이터 바인딩 (기존 필드 애그리게이터 사용)
+            Bind(formatFontFamilyComboBox, "Text", _surface.FieldAggregator.GetField(FieldType.FONT_FAMILY), "Value", NotNullValidator.GetInstance());
+            Bind(formatFontSizeUpDown, "Value", _surface.FieldAggregator.GetField(FieldType.FONT_SIZE), "Value", DecimalFloatConverter.GetInstance(), NotNullValidator.GetInstance());
+            Bind(formatFontBoldButton, "Checked", _surface.FieldAggregator.GetField(FieldType.FONT_BOLD), "Value", NotNullValidator.GetInstance());
+            Bind(formatFontItalicButton, "Checked", _surface.FieldAggregator.GetField(FieldType.FONT_ITALIC), "Value", NotNullValidator.GetInstance());
+            Bind(formatTextHorizontalAlignmentButton, "SelectedTag", _surface.FieldAggregator.GetField(FieldType.TEXT_HORIZONTAL_ALIGNMENT), "Value", NotNullValidator.GetInstance());
+            Bind(formatTextVerticalAlignmentButton, "SelectedTag", _surface.FieldAggregator.GetField(FieldType.TEXT_VERTICAL_ALIGNMENT), "Value", NotNullValidator.GetInstance());
+            Bind(formatShadowButton, "Checked", _surface.FieldAggregator.GetField(FieldType.SHADOW), "Value", NotNullValidator.GetInstance());
+            Bind(formatLineColorButton, "SelectedColor", _surface.FieldAggregator.GetField(FieldType.LINE_COLOR), "Value", NotNullValidator.GetInstance());
+            Bind(formatFillColorButton, "SelectedColor", _surface.FieldAggregator.GetField(FieldType.FILL_COLOR), "Value", NotNullValidator.GetInstance());
+            Bind(formatLineThicknessUpDown, "Value", _surface.FieldAggregator.GetField(FieldType.LINE_THICKNESS), "Value", DecimalFloatConverter.GetInstance(), NotNullValidator.GetInstance());
+
+            // 왕샷: 서식 탭 그룹 KeyTips
+            _ribbon.SetGroupKeyTip(tabIndex, 0, "F"); // 글꼴
+            _ribbon.SetGroupKeyTip(tabIndex, 1, "A"); // 정렬
+            _ribbon.SetGroupKeyTip(tabIndex, 2, "S"); // 스타일
+            _ribbon.SetGroupKeyTip(tabIndex, 3, "B"); // 테두리/채우기
+        }
+
+        /// <summary>
+        /// 왕샷: 정렬 메뉴 항목 생성
+        /// </summary>
+        private ToolStripMenuItem CreateAlignmentMenuItem(string text, StringAlignment alignment, BindableToolStripDropDownButton owner)
+        {
+            var item = new ToolStripMenuItem(text)
+            {
+                Tag = alignment,
+                CheckOnClick = true
+            };
+            item.Click += (s, e) =>
+            {
+                owner.SelectedTag = alignment;
+                // 바인딩을 통해 필드 업데이트됨
+            };
+            return item;
         }
 
         /// <summary>

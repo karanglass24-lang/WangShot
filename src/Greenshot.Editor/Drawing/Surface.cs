@@ -261,6 +261,26 @@ namespace Greenshot.Editor.Drawing
         [NonSerialized] private bool _drawingSuspended;
 
         /// <summary>
+        /// 왕샷: 스마트 이동(내용 인식 이동) 활성화 상태
+        /// </summary>
+        [NonSerialized] private bool _smartMoveActive;
+
+        /// <summary>
+        /// 왕샷: 스마트 이동 시 원본 위치의 배경 이미지 (인페인팅용)
+        /// </summary>
+        [NonSerialized] private Bitmap _smartMoveBackground;
+
+        /// <summary>
+        /// 왕샷: 스마트 이동 시 원본 영역 경계
+        /// </summary>
+        [NonSerialized] private NativeRect _smartMoveOriginalBounds;
+
+        /// <summary>
+        /// 왕샷: 스마트 이동 시 캡처한 배경 이미지의 원본 이미지상 오프셋
+        /// </summary>
+        [NonSerialized] private Point _smartMoveCaptureOffset;
+
+        /// <summary>
         /// all selected elements, do not serialize
         /// </summary>
         [NonSerialized] private readonly IDrawableContainerList selectedElements;
@@ -2836,6 +2856,15 @@ namespace Greenshot.Editor.Drawing
                     // 왕샷: the guides of the other elements, and Alt+drag copies the selection
                     _dragStartBounds = _mouseDownElement.Selected ? SelectedBounds() : _mouseDownElement.Bounds.Normalize();
                     _copyOnFirstMove = _mouseDownElement.Selected && selectedElements.Count > 0 && (InputState.ModifierKeys & Keys.Alt) == Keys.Alt;
+
+                    // 왕샷: Ctrl+Shift+드래그로 스마트 이동(내용 인식 이동) 시작
+                    _smartMoveActive = _mouseDownElement.Selected && selectedElements.Count > 0 && 
+                        (InputState.ModifierKeys & Keys.Control) == Keys.Control && 
+                        (InputState.ModifierKeys & Keys.Shift) == Keys.Shift;
+                    if (_smartMoveActive)
+                    {
+                        StartSmartMove();
+                    }
                 }
             }
         }
@@ -3050,6 +3079,152 @@ namespace Greenshot.Editor.Drawing
             }
         }
 
+        // ===== 왕샷: 스마트 이동 (내용 인식 이동) =====
+
+        /// <summary>
+        /// 왕샷: 스마트 이동 시작 - 선택된 요소들의 원본 영역 배경 캡처 및 인페인팅 준비
+        /// </summary>
+        private void StartSmartMove()
+        {
+            if (Image == null || !HasSelectedElements) return;
+
+            // 선택된 요소들의 경계 계산
+            _smartMoveOriginalBounds = SelectedBounds();
+            if (_smartMoveOriginalBounds.Width <= 0 || _smartMoveOriginalBounds.Height <= 0) return;
+
+            // 원본 영역보다 약간 크게 패딩을 주어 주변 텍스처도 캡처
+            int padding = Math.Max(10, Math.Min(_smartMoveOriginalBounds.Width, _smartMoveOriginalBounds.Height) / 4);
+            var captureBounds = _smartMoveOriginalBounds.Inflate(padding, padding);
+            captureBounds = captureBounds.Intersect(new NativeRect(0, 0, Image.Width, Image.Height));
+
+            // 캡처 오프셋 저장 (렌더링 시 사용)
+            _smartMoveCaptureOffset = new Point(captureBounds.X, captureBounds.Y);
+
+            // 원본 이미지에서 해당 영역 캡처 (주변 포함)
+            _smartMoveBackground = new Bitmap(captureBounds.Width, captureBounds.Height, PixelFormat.Format32bppArgb);
+            using (var g = Graphics.FromImage(_smartMoveBackground))
+            {
+                g.DrawImage(Image, 
+                    new Rectangle(0, 0, captureBounds.Width, captureBounds.Height),
+                    captureBounds.X, captureBounds.Y, captureBounds.Width, captureBounds.Height,
+                    GraphicsUnit.Pixel);
+            }
+
+            // 인페인팅: 선택 영역을 주변 텍스처로 채우기
+            InpaintBackground(captureBounds);
+        }
+
+        /// <summary>
+        /// 왕샷: 배경 인페인팅 - 선택 영역을 주변 텍스처로 자연스럽게 채움
+        /// </summary>
+        private void InpaintBackground(NativeRect captureBounds)
+        {
+            if (_smartMoveBackground == null) return;
+
+            int w = _smartMoveBackground.Width;
+            int h = _smartMoveBackground.Height;
+            int relX = _smartMoveOriginalBounds.X - captureBounds.X;
+            int relY = _smartMoveOriginalBounds.Y - captureBounds.Y;
+            int relW = _smartMoveOriginalBounds.Width;
+            int relH = _smartMoveOriginalBounds.Height;
+
+            // 간단한 패치 기반 인페인팅: 주변 픽셀로 구멍 채우기
+            // 경계에서부터 안쪽으로 채워나가는 간단한 알고리즘
+            for (int iter = 0; iter < 3; iter++)
+            {
+                for (int y = relY; y < relY + relH; y++)
+                {
+                    for (int x = relX; x < relX + relW; x++)
+                    {
+                        if (x < 0 || y < 0 || x >= w || y >= h) continue;
+
+                        // 주변 유효 픽셀 찾기 (상하좌우)
+                        int count = 0;
+                        int r = 0, g = 0, b = 0, a = 0;
+                        int radius = 1 + iter;
+
+                        for (int dy = -radius; dy <= radius; dy++)
+                        {
+                            for (int dx = -radius; dx <= radius; dx++)
+                            {
+                                int nx = x + dx;
+                                int ny = y + dy;
+                                if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+                                // 구멍 바깥쪽 픽셀만 사용
+                                if (nx >= relX && nx < relX + relW && ny >= relY && ny < relY + relH) continue;
+
+                                Color c = _smartMoveBackground.GetPixel(nx, ny);
+                                if (c.A > 0)
+                                {
+                                    r += c.R;
+                                    g += c.G;
+                                    b += c.B;
+                                    a += c.A;
+                                    count++;
+                                }
+                            }
+                        }
+
+                        if (count > 0)
+                        {
+                            _smartMoveBackground.SetPixel(x, y, Color.FromArgb(a / count, r / count, g / count, b / count));
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 왕샷: 스마트 이동 중 원본 위치에 인페인팅된 배경 렌더링
+        /// </summary>
+        private void RenderSmartMoveBackground()
+        {
+            if (_smartMoveBackground == null || Image == null) return;
+
+            // 원본 이미지에 인페인팅된 배경을 합성
+            using (var graphics = Graphics.FromImage(Image))
+            {
+                // 인페인팅된 배경에서 원본 영역에 해당하는 부분 추출
+                var srcRect = new Rectangle(0, 0, _smartMoveOriginalBounds.Width, _smartMoveOriginalBounds.Height);
+                var destRect = new Rectangle(_smartMoveOriginalBounds.X, _smartMoveOriginalBounds.Y, _smartMoveOriginalBounds.Width, _smartMoveOriginalBounds.Height);
+
+                // 인페인팅된 배경에서 해당 영역 추출해서 그리기
+                // 캡처 오프셋을 고려하여 정확한 위치 계산
+                int relX = _smartMoveOriginalBounds.X - _smartMoveCaptureOffset.X;
+                int relY = _smartMoveOriginalBounds.Y - _smartMoveCaptureOffset.Y;
+
+                using (var patch = new Bitmap(_smartMoveOriginalBounds.Width, _smartMoveOriginalBounds.Height))
+                {
+                    using (var patchGraphics = Graphics.FromImage(patch))
+                    {
+                        // 인페인팅된 배경에서 원본 영역에 해당하는 부분 그리기
+                        patchGraphics.DrawImage(_smartMoveBackground, 
+                            new Rectangle(0, 0, _smartMoveOriginalBounds.Width, _smartMoveOriginalBounds.Height),
+                            new Rectangle(relX, relY, _smartMoveOriginalBounds.Width, _smartMoveOriginalBounds.Height),
+                            GraphicsUnit.Pixel);
+                    }
+                    graphics.DrawImage(patch, destRect, srcRect, GraphicsUnit.Pixel);
+                }
+            }
+
+            Invalidate();
+        }
+
+        /// <summary>
+        /// 왕샷: 스마트 이동 종료 - 리소스 정리
+        /// </summary>
+        private void EndSmartMove()
+        {
+            _smartMoveActive = false;
+            if (_smartMoveBackground != null)
+            {
+                _smartMoveBackground.Dispose();
+                _smartMoveBackground = null;
+            }
+            _smartMoveOriginalBounds = NativeRect.Empty;
+            _smartMoveCaptureOffset = Point.Empty;
+        }
+
         /// <summary>
         /// This event handle is called when the mouse button is unpressed
         /// </summary>
@@ -3080,6 +3255,11 @@ namespace Greenshot.Editor.Drawing
             _mouseDown = false;
             _mouseDownElement = null;
             _drawingSuspended = false;
+            // 왕샷: 스마트 이동 종료
+            if (_smartMoveActive)
+            {
+                EndSmartMove();
+            }
             if (DrawingMode == DrawingModes.None)
             {
                 // check whether an existing element was clicked
@@ -3494,6 +3674,12 @@ namespace Greenshot.Editor.Drawing
                 // an element is currently dragged
                 _mouseDownElement.Invalidate();
                 selectedElements.Invalidate();
+
+                // 왕샷: 스마트 이동 중이면 원본 영역에 인페인팅된 배경을 렌더링
+                if (_smartMoveActive && _smartMoveBackground != null)
+                {
+                    RenderSmartMoveBackground();
+                }
 
                 // 왕샷: Alt+drag copies the selection, but a click without a drag must not leave a copy behind
                 if (_copyOnFirstMove && (currentMouse.X != _mouseStart.X || currentMouse.Y != _mouseStart.Y))

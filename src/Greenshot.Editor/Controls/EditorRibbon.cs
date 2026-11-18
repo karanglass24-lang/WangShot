@@ -157,6 +157,14 @@ namespace Greenshot.Editor.Controls
             public bool IsFile;
             public FlowLayoutPanel Body;
             public Rectangle Bounds;
+            public bool Visible = true; // 컨텍스트 탭 표시/숨김용
+            public string KeyTip; // 왕샷: KeyTip 문자열 (예: "H" for Home)
+        }
+
+        private sealed class RibbonGroup
+        {
+            public Panel Panel;
+            public string KeyTip;
         }
 
         private readonly List<RibbonTab> _tabs = new();
@@ -164,6 +172,7 @@ namespace Greenshot.Editor.Controls
         private readonly List<ToolStrip> _smallStrips = new();
         private readonly List<Panel> _groups = new();
         private readonly Dictionary<Panel, (ToolStrip Strip, Label Label)> _stripGroups = new();
+        private readonly List<RibbonGroup> _ribbonGroups = new(); // 왕샷: KeyTip용 그룹 정보
         private readonly ToolStrip _headerRight;
         private readonly ToolStrip _quickAccess;
         private int _selected;
@@ -173,6 +182,11 @@ namespace Greenshot.Editor.Controls
         private bool _scrollVisible;
         private bool _collapseHot;
         private Rectangle _collapseBounds;
+
+        // 왕샷: KeyTip 관련 필드
+        private bool _keyTipMode;
+        private readonly Dictionary<string, (string Type, int Index)> _keyTipMap = new(); // KeyTip 문자열 -> (타입, 인덱스)
+        private readonly HashSet<string> _usedKeyTips = new(); // 이미 사용된 KeyTip 문자들
 
         public EditorRibbon()
         {
@@ -256,6 +270,159 @@ namespace Greenshot.Editor.Controls
             _quickAccess.BringToFront();
             Invalidate();
             return _tabs.Count - 1;
+        }
+
+        /// <summary>
+        /// 왕샷: 탭 표시/숨김 설정 (컨텍스트 탭용)
+        /// </summary>
+        public void SetTabVisible(int tabIndex, bool visible)
+        {
+            if (tabIndex < 0 || tabIndex >= _tabs.Count) return;
+            if (_tabs[tabIndex].Visible == visible) return;
+
+            _tabs[tabIndex].Visible = visible;
+            // 숨기는 탭이 현재 선택된 탭이면 첫 번째 보이는 탭으로 이동
+            if (!visible && _selected == tabIndex)
+            {
+                int newTab = _tabs.FindIndex(t => t.Visible);
+                if (newTab >= 0) SelectTab(newTab);
+            }
+            Invalidate();
+        }
+
+        /// <summary>
+        /// 왕샷: 탭 표시 여부 확인
+        /// </summary>
+        public bool IsTabVisible(int tabIndex)
+        {
+            if (tabIndex < 0 || tabIndex >= _tabs.Count) return false;
+            return _tabs[tabIndex].Visible;
+        }
+
+        /// <summary>
+        /// 왕샷: 탭의 KeyTip 설정
+        /// </summary>
+        public void SetTabKeyTip(int tabIndex, string keyTip)
+        {
+            if (tabIndex < 0 || tabIndex >= _tabs.Count) return;
+            _tabs[tabIndex].KeyTip = keyTip?.ToUpperInvariant();
+        }
+
+        /// <summary>
+        /// 왕샷: 그룹의 KeyTip 설정 (탭 인덱스, 그룹 인덱스 순서)
+        /// </summary>
+        public void SetGroupKeyTip(int tabIndex, int groupIndex, string keyTip)
+        {
+            if (tabIndex < 0 || tabIndex >= _tabs.Count) return;
+            var tab = _tabs[tabIndex];
+            int groupCount = 0;
+            foreach (var control in tab.Body.Controls)
+            {
+                if (control is Panel panel && _stripGroups.ContainsKey(panel))
+                {
+                    if (groupCount == groupIndex)
+                    {
+                        // _ribbonGroups에서 해당 그룹 찾기
+                        foreach (var rg in _ribbonGroups)
+                        {
+                            if (rg.Panel == panel)
+                            {
+                                rg.KeyTip = keyTip?.ToUpperInvariant();
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                    groupCount++;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 왕샷: KeyTip 모드 진입/종료
+        /// </summary>
+        public void SetKeyTipMode(bool enabled)
+        {
+            if (_keyTipMode == enabled) return;
+            _keyTipMode = enabled;
+            if (enabled)
+            {
+                BuildKeyTipMap();
+            }
+            else
+            {
+                _keyTipMap.Clear();
+                _usedKeyTips.Clear();
+            }
+            Invalidate();
+        }
+
+        /// <summary>
+        /// 왕샷: KeyTip 맵 구성 (탭, 그룹, 버튼에 문자 할당)
+        /// </summary>
+        private void BuildKeyTipMap()
+        {
+            _keyTipMap.Clear();
+            _usedKeyTips.Clear();
+
+            // 탭 KeyTip 할당
+            for (int i = 0; i < _tabs.Count; i++)
+            {
+                if (!_tabs[i].Visible) continue;
+                string kt = _tabs[i].KeyTip ?? AutoAssignKeyTip(_tabs[i].Title);
+                _keyTipMap[kt] = ("Tab", i);
+            }
+
+            // 현재 선택된 탭의 그룹 KeyTip 할당
+            if (_selected >= 0 && _selected < _tabs.Count)
+            {
+                var tab = _tabs[_selected];
+                int groupIdx = 0;
+                foreach (var control in tab.Body.Controls)
+                {
+                    if (control is Panel panel && _stripGroups.ContainsKey(panel))
+                    {
+                        // _ribbonGroups에서 찾기
+                        foreach (var rg in _ribbonGroups)
+                        {
+                            if (rg.Panel == panel)
+                            {
+                                string kt = rg.KeyTip ?? AutoAssignKeyTip(rg.Panel.Controls.OfType<Label>().FirstOrDefault()?.Text ?? $"G{groupIdx}");
+                                _keyTipMap[kt] = ("Group", _ribbonGroups.IndexOf(rg));
+                                break;
+                            }
+                        }
+                        groupIdx++;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 왕샷: 자동 KeyTip 문자 할당 (첫 글자부터 사용 안 된 것 찾기)
+        /// </summary>
+        private string AutoAssignKeyTip(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return "?";
+            foreach (char c in text.ToUpperInvariant())
+            {
+                if (char.IsLetterOrDigit(c) && !_usedKeyTips.Contains(c.ToString()))
+                {
+                    _usedKeyTips.Add(c.ToString());
+                    return c.ToString();
+                }
+            }
+            // 모두 사용됐으면 숫자 시도
+            for (int i = 1; i <= 99; i++)
+            {
+                string s = i.ToString();
+                if (!_usedKeyTips.Contains(s))
+                {
+                    _usedKeyTips.Add(s);
+                    return s;
+                }
+            }
+            return "?";
         }
 
         /// <summary>
@@ -419,6 +586,8 @@ namespace Greenshot.Editor.Controls
             _tabs[tabIndex].Body.Controls.Add(group);
             _groups.Add(group);
             _stripGroups[group] = (strip, label);
+            // 왕샷: KeyTip용 그룹 정보 저장
+            _ribbonGroups.Add(new RibbonGroup { Panel = group, KeyTip = null });
             ApplyTheme(EditorTheme.Current);
         }
 
@@ -680,6 +849,7 @@ namespace Greenshot.Editor.Controls
             using var font = new Font(Font.FontFamily, Font.Size + 0.5f, FontStyle.Regular);
             foreach (var tab in _tabs)
             {
+                if (!tab.Visible) continue; // 숨겨진 탭은 레이아웃에서 제외
                 int width = TextRenderer.MeasureText(tab.Title, font).Width + Scale(30);
                 tab.Bounds = new Rectangle(x, QuickRowHeight + Scale(2), width, TabRowHeight - Scale(2));
                 x += width + Scale(2);
@@ -722,6 +892,7 @@ namespace Greenshot.Editor.Controls
             for (int i = 0; i < _tabs.Count; i++)
             {
                 var tab = _tabs[i];
+                if (!tab.Visible) continue; // 숨겨진 탭은 그리지 않음
                 bool selected = i == _selected;
                 if (selected)
                 {
@@ -774,6 +945,80 @@ namespace Greenshot.Editor.Controls
             {
                 graphics.DrawLines(chevronPen, new[] { new Point(cx - 4, cy + 2), new Point(cx, cy - 2), new Point(cx + 4, cy + 2) });
             }
+
+            // 왕샷: KeyTip 배지 그리기
+            if (_keyTipMode)
+            {
+                DrawKeyTips(graphics, theme);
+            }
+        }
+
+        /// <summary>
+        /// 왕샷: KeyTip 배지 렌더링
+        /// </summary>
+        private void DrawKeyTips(Graphics graphics, EditorTheme theme)
+        {
+            using var keyTipFont = new Font(Font.FontFamily, Font.Size - 1f, FontStyle.Bold);
+            using var keyTipBrush = new SolidBrush(theme.Highlight);
+            using var keyTipBackBrush = new SolidBrush(Color.FromArgb(220, theme.Background.R, theme.Background.G, theme.Background.B));
+            using var keyTipBorderPen = new Pen(theme.Highlight, 1.5f);
+
+            // 탭 KeyTips
+            for (int i = 0; i < _tabs.Count; i++)
+            {
+                var tab = _tabs[i];
+                if (!tab.Visible || string.IsNullOrEmpty(tab.KeyTip)) continue;
+
+                var bounds = tab.Bounds;
+                int badgeWidth = Scale(24);
+                int badgeHeight = Scale(18);
+                int x = bounds.Left + (bounds.Width - badgeWidth) / 2;
+                int y = bounds.Bottom + Scale(2);
+
+                var badgeRect = new Rectangle(x, y, badgeWidth, badgeHeight);
+                using var path = Rounded(badgeRect, Scale(3));
+                graphics.FillPath(keyTipBackBrush, path);
+                graphics.DrawPath(keyTipBorderPen, path);
+
+                TextRenderer.DrawText(graphics, tab.KeyTip, keyTipFont, badgeRect, theme.Highlight,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
+            }
+
+            // 현재 탭의 그룹 KeyTips
+            if (_selected >= 0 && _selected < _tabs.Count && !_collapsed)
+            {
+                var tab = _tabs[_selected];
+                foreach (var control in tab.Body.Controls)
+                {
+                    if (control is Panel panel && _stripGroups.ContainsKey(panel))
+                    {
+                        var label = panel.Controls.OfType<Label>().FirstOrDefault();
+                        string keyTip = null;
+                        foreach (var rg in _ribbonGroups)
+                        {
+                            if (rg.Panel == panel)
+                            {
+                                keyTip = rg.KeyTip;
+                                break;
+                            }
+                        }
+                        if (string.IsNullOrEmpty(keyTip)) continue;
+
+                        int badgeWidth = Scale(24);
+                        int badgeHeight = Scale(18);
+                        int x = panel.Left + (panel.Width - badgeWidth) / 2;
+                        int y = panel.Top + Scale(2);
+
+                        var badgeRect = new Rectangle(x, y, badgeWidth, badgeHeight);
+                        using var path = Rounded(badgeRect, Scale(3));
+                        graphics.FillPath(keyTipBackBrush, path);
+                        graphics.DrawPath(keyTipBorderPen, path);
+
+                        TextRenderer.DrawText(graphics, keyTip, keyTipFont, badgeRect, theme.Highlight,
+                            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
+                    }
+                }
+            }
         }
 
         private static GraphicsPath RoundedCard(Rectangle bounds, int radius)
@@ -788,10 +1033,25 @@ namespace Greenshot.Editor.Controls
             return path;
         }
 
+        /// <summary>
+        /// 왕샷: 작은 배지용 둥근 사각형 (KeyTip용)
+        /// </summary>
+        private static GraphicsPath Rounded(Rectangle bounds, int radius)
+        {
+            var path = new GraphicsPath();
+            int d = radius * 2;
+            path.AddArc(bounds.Left, bounds.Top, d, d, 180, 90);
+            path.AddArc(bounds.Right - d, bounds.Top, d, d, 270, 90);
+            path.AddArc(bounds.Right - d, bounds.Bottom - d, d, d, 0, 90);
+            path.AddArc(bounds.Left, bounds.Bottom - d, d, d, 90, 90);
+            path.CloseFigure();
+            return path;
+        }
+
         protected override void OnMouseMove(MouseEventArgs e)
         {
             base.OnMouseMove(e);
-            int hot = _tabs.FindIndex(t => t.Bounds.Contains(e.Location));
+            int hot = _tabs.FindIndex(t => t.Visible && t.Bounds.Contains(e.Location));
             bool collapseHot = _collapseBounds.Contains(e.Location);
             if (hot != _hot || collapseHot != _collapseHot)
             {
@@ -823,11 +1083,94 @@ namespace Greenshot.Editor.Controls
                     return;
                 }
 
-                int index = _tabs.FindIndex(t => t.Bounds.Contains(e.Location));
+                int index = _tabs.FindIndex(t => t.Visible && t.Bounds.Contains(e.Location));
                 if (index >= 0)
                 {
                     SelectTab(index);
                 }
+            }
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+
+            // 왕샷: KeyTip 모드 처리
+            if (_keyTipMode)
+            {
+                if (e.KeyCode == Keys.Escape)
+                {
+                    SetKeyTipMode(false);
+                    e.Handled = true;
+                    return;
+                }
+
+                // KeyTip 문자열 매칭 (단일 문자 또는 숫자)
+                string keyChar = null;
+                if (e.KeyCode >= Keys.A && e.KeyCode <= Keys.Z)
+                {
+                    keyChar = ((char)('A' + (e.KeyCode - Keys.A))).ToString();
+                }
+                else if (e.KeyCode >= Keys.D0 && e.KeyCode <= Keys.D9)
+                {
+                    keyChar = ((char)('0' + (e.KeyCode - Keys.D0))).ToString();
+                }
+                else if (e.KeyCode >= Keys.NumPad0 && e.KeyCode <= Keys.NumPad9)
+                {
+                    keyChar = ((char)('0' + (e.KeyCode - Keys.NumPad0))).ToString();
+                }
+
+                if (!string.IsNullOrEmpty(keyChar) && _keyTipMap.TryGetValue(keyChar, out var action))
+                {
+                    switch (action.Type)
+                    {
+                        case "Tab":
+                            SelectTab(action.Index);
+                            // 탭 선택 후 해당 탭의 그룹 KeyTips 표시 위해 맵 재구성
+                            BuildKeyTipMap();
+                            Invalidate();
+                            break;
+                        case "Group":
+                            // 그룹 선택 시 해당 그룹의 첫 번째 버튼 포커스 또는 클릭 시뮬레이션
+                            if (action.Index >= 0 && action.Index < _ribbonGroups.Count)
+                            {
+                                var group = _ribbonGroups[action.Index];
+                                if (_stripGroups.TryGetValue(group.Panel, out var stripInfo))
+                                {
+                                    var strip = stripInfo.Strip;
+                                    if (strip != null && strip.Items.Count > 0)
+                                    {
+                                        var firstItem = strip.Items.Cast<ToolStripItem>().FirstOrDefault(i => i.Available && i.Enabled);
+                                        if (firstItem != null)
+                                        {
+                                            // 버튼 클릭 시뮬레이션
+                                            if (firstItem is ToolStripButton btn)
+                                            {
+                                                btn.PerformClick();
+                                            }
+                                            else if (firstItem is ToolStripDropButton dropBtn)
+                                            {
+                                                dropBtn.ShowDropDown();
+                                            }
+                                            else if (firstItem is ToolStripSplitButton splitBtn)
+                                            {
+                                                splitBtn.PerformButtonClick();
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            break;
+                    }
+                    // KeyTip 액션 후 모드 종료 (Office 스타일: 한 번 누르면 끝)
+                    SetKeyTipMode(false);
+                    e.Handled = true;
+                }
+            }
+            else if (e.KeyCode == Keys.Menu && !e.Alt) // Alt 키 단독 눌림
+            {
+                SetKeyTipMode(true);
+                e.Handled = true;
             }
         }
     }
