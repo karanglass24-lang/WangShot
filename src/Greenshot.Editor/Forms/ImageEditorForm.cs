@@ -104,6 +104,8 @@ namespace Greenshot.Editor.Forms
         private Font _hdrActiveFont;
         private Font _hdrLostFont;
         private List<BidirectionalBinding> _fieldBindings = new();
+        // 왕샷: 텍스트 편집 시작/종료를 지켜보는 컨테이너 (서식 컨텍스트 탭용)
+        private readonly HashSet<TextContainer> _watchedTextContainers = new();
         private ToolStripButton[] _toolbarButtons;
         private bool _showWithoutActivation;
 
@@ -1435,6 +1437,8 @@ namespace Greenshot.Editor.Forms
             }
 
             _fieldBindings.Clear();
+            // 왕샷: 텍스트 편집 감시 해제
+            ClearTextEditingWatchers();
         }
 
         /// <summary>
@@ -3022,6 +3026,8 @@ namespace Greenshot.Editor.Forms
                 NotNullValidator.GetInstance());
             Bind(counterUpDown, "Value", _surface, "CounterStart", DecimalIntConverter.GetInstance(), NotNullValidator.GetInstance());
             Bind(_stepShapeButton, "SelectedTag", _surface.FieldAggregator.GetField(FieldType.STEP_SHAPE), "Value", NotNullValidator.GetInstance());
+            // 왕샷: 서식 컨텍스트 탭의 컨트롤도 표면의 필드에 연결 (폼 생성 시에는 표면이 없어서 여기서 한다)
+            BindFormatFieldControls();
         }
 
         private BindableToolStripDropDownButton _stepShapeButton;
@@ -3285,11 +3291,55 @@ namespace Greenshot.Editor.Forms
         }
 
         /// <summary>
+        /// 왕샷: 텍스트 편집 시작/종료를 지켜볼 컨테이너를 현재 선택에서 등록한다.
+        /// 텍스트를 더블 클릭해 편집을 시작하면 이 이벤트로 서식 탭을 보여준다.
+        /// </summary>
+        private void SyncTextEditingWatchers()
+        {
+            if (_surface == null)
+            {
+                return;
+            }
+
+            foreach (var textContainer in _surface.SelectedElements.OfType<TextContainer>())
+            {
+                if (_watchedTextContainers.Add(textContainer))
+                {
+                    textContainer.TextEditingStarted += TextContainerEditingChanged;
+                    textContainer.TextEditingEnded += TextContainerEditingChanged;
+                }
+            }
+        }
+
+        private void TextContainerEditingChanged(object sender, EventArgs e)
+        {
+            if (IsDisposed || Disposing)
+            {
+                return;
+            }
+
+            RefreshFieldControls();
+        }
+
+        private void ClearTextEditingWatchers()
+        {
+            foreach (var textContainer in _watchedTextContainers)
+            {
+                textContainer.TextEditingStarted -= TextContainerEditingChanged;
+                textContainer.TextEditingEnded -= TextContainerEditingChanged;
+            }
+
+            _watchedTextContainers.Clear();
+        }
+
+        /// <summary>
         /// 왕샷: 서식 컨텍스트 탭 표시/숨김 업데이트
         /// </summary>
         private void UpdateFormatContextTab()
         {
             if (_ribbon == null || _formatTabIndex < 0) return;
+
+            SyncTextEditingWatchers();
 
             bool hasTextEditing = _surface.SelectedElements?.OfType<TextContainer>().Any(t => t.IsEditing) == true;
             bool currentlyVisible = _ribbon.IsTabVisible(_formatTabIndex);
@@ -3425,7 +3475,12 @@ namespace Greenshot.Editor.Forms
                 fontItalicButton.Checked = _originalItalicCheckState;
             }
 
-            var fontFamily = fontFamilyComboBox.FontFamily;
+            // 왕샷: use the family of the combo box which changed (the properties bar or the format tab)
+            var fontFamily = (sender as FontFamilyComboBox)?.FontFamily ?? fontFamilyComboBox?.FontFamily;
+            if (fontFamily == null)
+            {
+                return;
+            }
 
             bool boldAvailable = fontFamily.IsStyleAvailable(FontStyle.Bold);
             if (fontBoldButton != null)

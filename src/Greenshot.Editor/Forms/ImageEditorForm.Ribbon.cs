@@ -36,6 +36,17 @@ namespace Greenshot.Editor.Forms
         private ToolStripButton _recentCapturesButton;
         // 왕샷: 서식 컨텍스트 탭 인덱스
         private int _formatTabIndex = -1;
+        // 왕샷: 서식 탭의 컨트롤들 (표면이 연결될 때 바인딩한다 - 폼 생성 시에는 _surface가 아직 없다)
+        private FontFamilyComboBox _formatFontFamilyComboBox;
+        private ToolStripNumericUpDown _formatFontSizeUpDown;
+        private BindableToolStripButton _formatFontBoldButton;
+        private BindableToolStripButton _formatFontItalicButton;
+        private BindableToolStripDropDownButton _formatTextHorizontalAlignmentButton;
+        private BindableToolStripDropDownButton _formatTextVerticalAlignmentButton;
+        private BindableToolStripButton _formatShadowButton;
+        private ToolStripColorButton _formatLineColorButton;
+        private ToolStripColorButton _formatFillColorButton;
+        private ToolStripNumericUpDown _formatLineThicknessUpDown;
 
         /// <summary>
         /// Put the buttons into groups, make the ribbon the only tool bar above the canvas
@@ -448,20 +459,20 @@ namespace Greenshot.Editor.Forms
             var fontGroup = _ribbon.AddGroup(tabIndex, "글꼴");
 
             // 글꼴 패밀리 콤보박스 (ToolStripComboBox 상속)
-            var formatFontFamilyComboBox = new FontFamilyComboBox
+            _formatFontFamilyComboBox = new FontFamilyComboBox
             {
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 MaxDropDownItems = 20,
                 Width = 180,
                 Padding = new Padding(2, 0, 0, 2)
             };
-            formatFontFamilyComboBox.GotFocus += ToolBarFocusableElementGotFocus;
-            formatFontFamilyComboBox.LostFocus += ToolBarFocusableElementLostFocus;
-            formatFontFamilyComboBox.PropertyChanged += FontPropertyChanged;
-            fontGroup.Items.Add(formatFontFamilyComboBox);
+            _formatFontFamilyComboBox.GotFocus += ToolBarFocusableElementGotFocus;
+            _formatFontFamilyComboBox.LostFocus += ToolBarFocusableElementLostFocus;
+            _formatFontFamilyComboBox.PropertyChanged += FontPropertyChanged;
+            fontGroup.Items.Add(_formatFontFamilyComboBox);
 
             // 글꼴 크기
-            var formatFontSizeUpDown = new ToolStripNumericUpDown
+            _formatFontSizeUpDown = new ToolStripNumericUpDown
             {
                 DecimalPlaces = 0,
                 Minimum = 1,
@@ -469,85 +480,85 @@ namespace Greenshot.Editor.Forms
                 Width = 60,
                 ToolTipText = "글꼴 크기"
             };
-            formatFontSizeUpDown.GotFocus += ToolBarFocusableElementGotFocus;
-            formatFontSizeUpDown.LostFocus += ToolBarFocusableElementLostFocus;
-            fontGroup.Items.Add(formatFontSizeUpDown);
+            _formatFontSizeUpDown.GotFocus += ToolBarFocusableElementGotFocus;
+            _formatFontSizeUpDown.LostFocus += ToolBarFocusableElementLostFocus;
+            fontGroup.Items.Add(_formatFontSizeUpDown);
 
             // 굵게/기울임꼴
-            var formatFontBoldButton = new BindableToolStripButton
+            _formatFontBoldButton = new BindableToolStripButton
             {
                 CheckOnClick = true,
                 ToolTipText = "굵게 (Ctrl+B)",
                 DisplayStyle = ToolStripItemDisplayStyle.Image
             };
-            IconBinder.Bind(formatFontBoldButton, IconSource.FromResource(typeof(ImageEditorForm), "fontBoldButton.Image"));
-            fontGroup.Items.Add(formatFontBoldButton);
+            IconBinder.Bind(_formatFontBoldButton, IconSource.FromResource(typeof(ImageEditorForm), "fontBoldButton.Image"));
+            fontGroup.Items.Add(_formatFontBoldButton);
 
-            var formatFontItalicButton = new BindableToolStripButton
+            _formatFontItalicButton = new BindableToolStripButton
             {
                 CheckOnClick = true,
                 ToolTipText = "기울임꼴 (Ctrl+I)",
                 DisplayStyle = ToolStripItemDisplayStyle.Image
             };
-            IconBinder.Bind(formatFontItalicButton, IconSource.FromResource(typeof(ImageEditorForm), "fontItalicButton.Image"));
-            fontGroup.Items.Add(formatFontItalicButton);
+            IconBinder.Bind(_formatFontItalicButton, IconSource.FromResource(typeof(ImageEditorForm), "fontItalicButton.Image"));
+            fontGroup.Items.Add(_formatFontItalicButton);
 
             // 정렬 그룹 (드롭다운 버튼 사용)
             var alignmentGroup = _ribbon.AddGroup(tabIndex, "정렬");
 
-            var formatTextHorizontalAlignmentButton = new BindableToolStripDropDownButton
+            _formatTextHorizontalAlignmentButton = new BindableToolStripDropDownButton
             {
                 ToolTipText = "가로 정렬",
                 DisplayStyle = ToolStripItemDisplayStyle.Image
             };
-            IconBinder.Bind(formatTextHorizontalAlignmentButton, IconSource.FromResource(typeof(ImageEditorForm), "textAlignCenterButton.Image"));
+            IconBinder.Bind(_formatTextHorizontalAlignmentButton, IconSource.FromResource(typeof(ImageEditorForm), "textAlignCenterButton.Image"));
             // 드롭다운 메뉴 구성
-            formatTextHorizontalAlignmentButton.DropDownItems.Add(
-                CreateAlignmentMenuItem("왼쪽", StringAlignment.Near, formatTextHorizontalAlignmentButton));
-            formatTextHorizontalAlignmentButton.DropDownItems.Add(
-                CreateAlignmentMenuItem("가운데", StringAlignment.Center, formatTextHorizontalAlignmentButton));
-            formatTextHorizontalAlignmentButton.DropDownItems.Add(
-                CreateAlignmentMenuItem("오른쪽", StringAlignment.Far, formatTextHorizontalAlignmentButton));
-            alignmentGroup.Items.Add(formatTextHorizontalAlignmentButton);
+            _formatTextHorizontalAlignmentButton.DropDownItems.Add(
+                CreateAlignmentMenuItem("왼쪽", StringAlignment.Near, _formatTextHorizontalAlignmentButton));
+            _formatTextHorizontalAlignmentButton.DropDownItems.Add(
+                CreateAlignmentMenuItem("가운데", StringAlignment.Center, _formatTextHorizontalAlignmentButton));
+            _formatTextHorizontalAlignmentButton.DropDownItems.Add(
+                CreateAlignmentMenuItem("오른쪽", StringAlignment.Far, _formatTextHorizontalAlignmentButton));
+            alignmentGroup.Items.Add(_formatTextHorizontalAlignmentButton);
 
-            var formatTextVerticalAlignmentButton = new BindableToolStripDropDownButton
+            _formatTextVerticalAlignmentButton = new BindableToolStripDropDownButton
             {
                 ToolTipText = "세로 정렬",
                 DisplayStyle = ToolStripItemDisplayStyle.Image
             };
-            IconBinder.Bind(formatTextVerticalAlignmentButton, IconSource.FromResource(typeof(ImageEditorForm), "textAlignMiddleButton.Image"));
-            formatTextVerticalAlignmentButton.DropDownItems.Add(
-                CreateAlignmentMenuItem("위쪽", StringAlignment.Near, formatTextVerticalAlignmentButton));
-            formatTextVerticalAlignmentButton.DropDownItems.Add(
-                CreateAlignmentMenuItem("가운데", StringAlignment.Center, formatTextVerticalAlignmentButton));
-            formatTextVerticalAlignmentButton.DropDownItems.Add(
-                CreateAlignmentMenuItem("아래쪽", StringAlignment.Far, formatTextVerticalAlignmentButton));
-            alignmentGroup.Items.Add(formatTextVerticalAlignmentButton);
+            IconBinder.Bind(_formatTextVerticalAlignmentButton, IconSource.FromResource(typeof(ImageEditorForm), "textAlignMiddleButton.Image"));
+            _formatTextVerticalAlignmentButton.DropDownItems.Add(
+                CreateAlignmentMenuItem("위쪽", StringAlignment.Near, _formatTextVerticalAlignmentButton));
+            _formatTextVerticalAlignmentButton.DropDownItems.Add(
+                CreateAlignmentMenuItem("가운데", StringAlignment.Center, _formatTextVerticalAlignmentButton));
+            _formatTextVerticalAlignmentButton.DropDownItems.Add(
+                CreateAlignmentMenuItem("아래쪽", StringAlignment.Far, _formatTextVerticalAlignmentButton));
+            alignmentGroup.Items.Add(_formatTextVerticalAlignmentButton);
 
             // 스타일 그룹
             var styleGroup = _ribbon.AddGroup(tabIndex, "스타일");
 
-            var formatShadowButton = new BindableToolStripButton
+            _formatShadowButton = new BindableToolStripButton
             {
                 CheckOnClick = true,
                 ToolTipText = "그림자",
                 DisplayStyle = ToolStripItemDisplayStyle.Image
             };
-            IconBinder.Bind(formatShadowButton, IconSource.FromResource(typeof(ImageEditorForm), "shadowButton.Image"));
-            styleGroup.Items.Add(formatShadowButton);
+            IconBinder.Bind(_formatShadowButton, IconSource.FromResource(typeof(ImageEditorForm), "shadowButton.Image"));
+            styleGroup.Items.Add(_formatShadowButton);
 
             // 테두리/채우기 그룹
             var borderFillGroup = _ribbon.AddGroup(tabIndex, "테두리/채우기");
 
-            var formatLineColorButton = new ToolStripColorButton { ToolTipText = "테두리 색" };
-            IconBinder.Bind(formatLineColorButton, IconSource.FromResource(typeof(ImageEditorForm), "lineColorButton.Image"));
-            borderFillGroup.Items.Add(formatLineColorButton);
+            _formatLineColorButton = new ToolStripColorButton { ToolTipText = "테두리 색" };
+            IconBinder.Bind(_formatLineColorButton, IconSource.FromResource(typeof(ImageEditorForm), "lineColorButton.Image"));
+            borderFillGroup.Items.Add(_formatLineColorButton);
 
-            var formatFillColorButton = new ToolStripColorButton { ToolTipText = "채우기 색" };
-            IconBinder.Bind(formatFillColorButton, IconSource.FromResource(typeof(ImageEditorForm), "fillColorButton.Image"));
-            borderFillGroup.Items.Add(formatFillColorButton);
+            _formatFillColorButton = new ToolStripColorButton { ToolTipText = "채우기 색" };
+            IconBinder.Bind(_formatFillColorButton, IconSource.FromResource(typeof(ImageEditorForm), "fillColorButton.Image"));
+            borderFillGroup.Items.Add(_formatFillColorButton);
 
-            var formatLineThicknessUpDown = new ToolStripNumericUpDown
+            _formatLineThicknessUpDown = new ToolStripNumericUpDown
             {
                 DecimalPlaces = 0,
                 Minimum = 0,
@@ -555,27 +566,39 @@ namespace Greenshot.Editor.Forms
                 Width = 60,
                 ToolTipText = "테두리 두께"
             };
-            formatLineThicknessUpDown.GotFocus += ToolBarFocusableElementGotFocus;
-            formatLineThicknessUpDown.LostFocus += ToolBarFocusableElementLostFocus;
-            borderFillGroup.Items.Add(formatLineThicknessUpDown);
-
-            // 데이터 바인딩 (기존 필드 애그리게이터 사용)
-            Bind(formatFontFamilyComboBox, "Text", _surface.FieldAggregator.GetField(FieldType.FONT_FAMILY), "Value", NotNullValidator.GetInstance());
-            Bind(formatFontSizeUpDown, "Value", _surface.FieldAggregator.GetField(FieldType.FONT_SIZE), "Value", DecimalFloatConverter.GetInstance(), NotNullValidator.GetInstance());
-            Bind(formatFontBoldButton, "Checked", _surface.FieldAggregator.GetField(FieldType.FONT_BOLD), "Value", NotNullValidator.GetInstance());
-            Bind(formatFontItalicButton, "Checked", _surface.FieldAggregator.GetField(FieldType.FONT_ITALIC), "Value", NotNullValidator.GetInstance());
-            Bind(formatTextHorizontalAlignmentButton, "SelectedTag", _surface.FieldAggregator.GetField(FieldType.TEXT_HORIZONTAL_ALIGNMENT), "Value", NotNullValidator.GetInstance());
-            Bind(formatTextVerticalAlignmentButton, "SelectedTag", _surface.FieldAggregator.GetField(FieldType.TEXT_VERTICAL_ALIGNMENT), "Value", NotNullValidator.GetInstance());
-            Bind(formatShadowButton, "Checked", _surface.FieldAggregator.GetField(FieldType.SHADOW), "Value", NotNullValidator.GetInstance());
-            Bind(formatLineColorButton, "SelectedColor", _surface.FieldAggregator.GetField(FieldType.LINE_COLOR), "Value", NotNullValidator.GetInstance());
-            Bind(formatFillColorButton, "SelectedColor", _surface.FieldAggregator.GetField(FieldType.FILL_COLOR), "Value", NotNullValidator.GetInstance());
-            Bind(formatLineThicknessUpDown, "Value", _surface.FieldAggregator.GetField(FieldType.LINE_THICKNESS), "Value", DecimalFloatConverter.GetInstance(), NotNullValidator.GetInstance());
+            _formatLineThicknessUpDown.GotFocus += ToolBarFocusableElementGotFocus;
+            _formatLineThicknessUpDown.LostFocus += ToolBarFocusableElementLostFocus;
+            borderFillGroup.Items.Add(_formatLineThicknessUpDown);
 
             // 왕샷: 서식 탭 그룹 KeyTips
             _ribbon.SetGroupKeyTip(tabIndex, 0, "F"); // 글꼴
             _ribbon.SetGroupKeyTip(tabIndex, 1, "A"); // 정렬
             _ribbon.SetGroupKeyTip(tabIndex, 2, "S"); // 스타일
             _ribbon.SetGroupKeyTip(tabIndex, 3, "B"); // 테두리/채우기
+        }
+
+        /// <summary>
+        /// 왕샷: 서식 탭의 컨트롤을 현재 표면의 필드에 연결한다.
+        /// 폼을 만들 때는 표면이 아직 없으므로, 표면이 연결될 때(BindFieldControls) 호출한다.
+        /// </summary>
+        private void BindFormatFieldControls()
+        {
+            if (_surface == null || _formatFontFamilyComboBox == null || _formatLineThicknessUpDown == null)
+            {
+                return;
+            }
+
+            var fields = _surface.FieldAggregator;
+            Bind(_formatFontFamilyComboBox, "Text", fields.GetField(FieldType.FONT_FAMILY), "Value", NotNullValidator.GetInstance());
+            Bind(_formatFontSizeUpDown, "Value", fields.GetField(FieldType.FONT_SIZE), "Value", DecimalFloatConverter.GetInstance(), NotNullValidator.GetInstance());
+            Bind(_formatFontBoldButton, "Checked", fields.GetField(FieldType.FONT_BOLD), "Value", NotNullValidator.GetInstance());
+            Bind(_formatFontItalicButton, "Checked", fields.GetField(FieldType.FONT_ITALIC), "Value", NotNullValidator.GetInstance());
+            Bind(_formatTextHorizontalAlignmentButton, "SelectedTag", fields.GetField(FieldType.TEXT_HORIZONTAL_ALIGNMENT), "Value", NotNullValidator.GetInstance());
+            Bind(_formatTextVerticalAlignmentButton, "SelectedTag", fields.GetField(FieldType.TEXT_VERTICAL_ALIGNMENT), "Value", NotNullValidator.GetInstance());
+            Bind(_formatShadowButton, "Checked", fields.GetField(FieldType.SHADOW), "Value", NotNullValidator.GetInstance());
+            Bind(_formatLineColorButton, "SelectedColor", fields.GetField(FieldType.LINE_COLOR), "Value", NotNullValidator.GetInstance());
+            Bind(_formatFillColorButton, "SelectedColor", fields.GetField(FieldType.FILL_COLOR), "Value", NotNullValidator.GetInstance());
+            Bind(_formatLineThicknessUpDown, "Value", fields.GetField(FieldType.LINE_THICKNESS), "Value", DecimalFloatConverter.GetInstance(), NotNullValidator.GetInstance());
         }
 
         /// <summary>
