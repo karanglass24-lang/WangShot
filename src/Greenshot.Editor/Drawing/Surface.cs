@@ -4295,23 +4295,67 @@ namespace Greenshot.Editor.Drawing
         }
 
         /// <summary>
-        /// 선택한 개체 그룹화 (TODO: proper group container implementation)
+        /// 선택한 개체 그룹화
         /// </summary>
         public void GroupSelected()
         {
             if (!HasSelectedElements || selectedElements.Count < 2) return;
-            // TODO: Implement proper IDrawableContainer group container
-            LOG.Info("GroupSelected: Not fully implemented yet");
+
+            var group = new GroupContainer(this);
+            var selected = selectedElements.Cast<DrawableContainer>().ToList();
+
+            // 자식들을 그룹에 추가 (그룹 로컬 좌표로 변환)
+            foreach (var element in selected)
+            {
+                element.Invalidate();
+                RemoveElement(element);
+                group.AddChildToGroup(element);
+            }
+
+            // 그룹 경계를 자식들에 맞춤
+            group.UpdateBoundsFromChildren();
+
+            // 그룹을 표면에 추가하고 선택
+            AddElement(group);
+            DeselectAllElements();
+            SelectElement(group);
+            _modified = true;
         }
 
         /// <summary>
-        /// 그룹 해제 (TODO: proper group container implementation)
+        /// 그룹 해제
         /// </summary>
         public void UngroupSelected()
         {
             if (!HasSelectedElements) return;
-            // TODO: Implement proper IDrawableContainer group container
-            LOG.Info("UngroupSelected: Not fully implemented yet");
+
+            var groups = selectedElements.OfType<GroupContainer>().ToList();
+            if (groups.Count == 0) return;
+
+            var allUngroupedChildren = new List<IDrawableContainer>();
+
+            foreach (var group in groups)
+            {
+                // 그룹을 제거하고 자식들을 표면으로 이동
+                var children = group.Ungroup().ToList();
+                RemoveElement(group);
+
+                foreach (var child in children)
+                {
+                    child.Parent = this;
+                    AddElement(child);
+                    allUngroupedChildren.Add(child);
+                }
+            }
+
+            // 자식들을 선택
+            DeselectAllElements();
+            foreach (var child in allUngroupedChildren)
+            {
+                SelectElement(child);
+            }
+
+            _modified = true;
         }
 
         /// <summary>

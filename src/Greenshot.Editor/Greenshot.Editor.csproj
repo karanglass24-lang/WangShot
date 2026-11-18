@@ -73,6 +73,7 @@
     <Compile Update="Drawing\Filters\SpotlightFilter.cs" />
     <Compile Update="Drawing\Filters\MagnifyLensFilter.cs" />
     <Compile Update="Drawing\Filters\SolidFilter.cs" />
+    <Compile Update="Drawing\GroupContainer.cs" />
   </ItemGroup>
 
   <ItemGroup>
