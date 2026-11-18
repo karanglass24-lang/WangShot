@@ -121,6 +121,13 @@ namespace Greenshot.Editor.Drawing
                 case PreparedFilter.MAGNIFICATION:
                     Add(new MagnifierFilter(this));
                     break;
+                // 왕샷: the textbook tools
+                case PreparedFilter.SPOTLIGHT:
+                    Add(new SpotlightFilter(this));
+                    break;
+                case PreparedFilter.MAGNIFY_LENS:
+                    Add(new MagnifyLensFilter(this));
+                    break;
             }
         }
     }

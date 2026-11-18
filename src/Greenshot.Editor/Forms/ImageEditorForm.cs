@@ -510,6 +510,8 @@ namespace Greenshot.Editor.Forms
             }
 
             panel1.BackColor = theme.CanvasSurround;
+            // 왕샷: the panel with the recent captures follows the theme, too
+            _recentCapturesPanel?.ApplyTheme();
             // The combo boxes and number fields in the property bar
             foreach (ToolStripItem item in propertiesToolStrip.Items)
             {
@@ -1962,7 +1964,10 @@ namespace Greenshot.Editor.Forms
                     SetButtonChecked(_edgeCrop && btnCropEdge != null ? btnCropEdge : btnCrop);
                     break;
                 case DrawingModes.Highlight:
-                    SetButtonChecked(btnHighlight);
+                    SetButtonChecked(HighlightToolForPreset());
+                    break;
+                case DrawingModes.ClickMark:
+                    SetButtonChecked(_clickMarkTool ?? btnCursor);
                     break;
                 case DrawingModes.Obfuscate:
                     SetButtonChecked(btnObfuscate);
@@ -2130,6 +2135,27 @@ namespace Greenshot.Editor.Forms
             RefreshFieldControls();
         }
 
+        /// <summary>
+        /// 왕샷: the button of the highlight tool which fits its preset (the highlighter, the spotlight or the magnifying glass)
+        /// </summary>
+        private ToolStripButton HighlightToolForPreset()
+        {
+            if (_surface?.FieldAggregator?.GetField(FieldType.PREPARED_FILTER_HIGHLIGHT)?.Value is FilterContainer.PreparedFilter preset)
+            {
+                if (preset == FilterContainer.PreparedFilter.SPOTLIGHT && _spotlightTool != null)
+                {
+                    return _spotlightTool;
+                }
+
+                if (preset == FilterContainer.PreparedFilter.MAGNIFY_LENS && _magnifyTool != null)
+                {
+                    return _magnifyTool;
+                }
+            }
+
+            return btnHighlight;
+        }
+
         private void BtnObfuscateClick(object sender, EventArgs e)
         {
             _surface.DrawingMode = DrawingModes.Obfuscate;
@@ -2153,6 +2179,15 @@ namespace Greenshot.Editor.Forms
             if (btnCropEdge != null)
             {
                 btnCropEdge.Checked = false;
+            }
+
+            // 왕샷: the emphasis tools are created with the ribbon, their names are on the buttons themselves
+            foreach (var emphasisButton in new[] { _spotlightTool, _magnifyTool, _clickMarkTool })
+            {
+                if (emphasisButton != null)
+                {
+                    emphasisButton.Checked = false;
+                }
             }
 
             if (_toolbarButtons != null)

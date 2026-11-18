@@ -36,6 +36,8 @@ namespace Greenshot.Base.Interfaces
         Path,
         SpeechBubble,
         StepLabel,
-        Emoji
+        Emoji,
+        // 왕샷: the click mark of the textbook editor
+        ClickMark
     }
 }

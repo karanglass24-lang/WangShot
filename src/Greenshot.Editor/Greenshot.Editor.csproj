@@ -66,6 +66,13 @@
     <Compile Update="Forms\ImageEditorForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Update="Controls\RecentCapturesPanel.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="Drawing\ClickMarkContainer.cs" />
+    <Compile Update="Drawing\Filters\SpotlightFilter.cs" />
+    <Compile Update="Drawing\Filters\MagnifyLensFilter.cs" />
+    <Compile Update="Drawing\Filters\SolidFilter.cs" />
   </ItemGroup>
 
   <ItemGroup>

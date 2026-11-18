@@ -48,10 +48,15 @@ namespace Greenshot.Editor.Drawing
         {
             BLUR,
             PIXELIZE,
+            // 왕샷: a solid block over the text
+            SOLID,
             TEXT_HIGHTLIGHT,
             AREA_HIGHLIGHT,
             GRAYSCALE,
-            MAGNIFICATION
+            MAGNIFICATION,
+            // 왕샷: the spotlight and the magnifying glass of the textbook editor
+            SPOTLIGHT,
+            MAGNIFY_LENS
         };
 
         public FilterContainer(ISurface parent) : base(parent)

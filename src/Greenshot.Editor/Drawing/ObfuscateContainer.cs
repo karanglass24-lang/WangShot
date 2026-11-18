@@ -20,6 +20,7 @@
  */
 
 using System;
+using System.Drawing;
 using System.Runtime.Serialization;
 using Greenshot.Base.Interfaces;
 using Greenshot.Base.Interfaces.Drawing;
@@ -42,6 +43,8 @@ namespace Greenshot.Editor.Drawing
         protected override void InitializeFields()
         {
             base.InitializeFields();
+            // 왕샷: the colour of a solid block
+            AddField(GetType(), FieldType.FILL_COLOR, Color.Black);
             AddField(GetType(), FieldType.PREPARED_FILTER_OBFUSCATE, PreparedFilter.PIXELIZE);
         }
 
@@ -88,6 +91,9 @@ namespace Greenshot.Editor.Drawing
                     break;
                 case PreparedFilter.PIXELIZE:
                     Add(new PixelizationFilter(this));
+                    break;
+                case PreparedFilter.SOLID:
+                    Add(new SolidFilter(this));
                     break;
             }
         }

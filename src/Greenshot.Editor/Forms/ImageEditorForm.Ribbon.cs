@@ -10,6 +10,7 @@ using Greenshot.Base.Core;
 using Greenshot.Base.Interfaces;
 using Greenshot.Editor.Controls;
 using Greenshot.Editor.Drawing;
+using Greenshot.Editor.Drawing.Fields;
 
 namespace Greenshot.Editor.Forms
 {
@@ -24,6 +25,14 @@ namespace Greenshot.Editor.Forms
         private ToolStripControlHost _ribbonHost;
         private ToolStripDropButton _emojiTool;
         private ColorPaletteControl _palette;
+        // 왕샷: the emphasis tools (spotlight, magnifying glass, click mark)
+        private ToolStripDropButton _emphasisTool;
+        private ToolStripButton _spotlightTool;
+        private ToolStripButton _magnifyTool;
+        private ToolStripButton _clickMarkTool;
+        // 왕샷: the panel with the recent captures, left of the canvas
+        private RecentCapturesPanel _recentCapturesPanel;
+        private ToolStripButton _recentCapturesButton;
 
         /// <summary>
         /// Put the buttons into groups, make the ribbon the only tool bar above the canvas
@@ -79,9 +88,12 @@ namespace Greenshot.Editor.Forms
             lineTool.SetMembers((btnLine, "선"), (btnArrow, "화살표"));
             var penTool = new ToolStripDropButton();
             penTool.SetMembers((btnFreehand, "연필"), (btnHighlight, "형광펜"));
+            // 왕샷: the emphasis tools of the textbook editor: the rest of the screenshot dark, a magnifying glass, a click mark
+            CreateEmphasisTools();
             var tools = AddRibbonGroup(home, "도구",
                 (selectTool, "선택"), (shapeTool, null), (lineTool, null), (penTool, null),
                 (btnText, "글자"), (btnSpeechBubble, "말풍선"), (btnStepLabel, "번호"), (emojiTool, "이모지"), (btnObfuscate, "가리기"),
+                (_emphasisTool, "강조"),
                 (NewAction("스크롤 캡처", "마우스가 있는 창(웹 페이지 등)을 스크롤하며 한 장으로 캡처해요 (3초 뒤 시작, Esc로 멈춤)", "scrollCapture.Image", (s, e) => SimpleServiceProvider.Current.GetInstance<IGreenshotShell>().StartScrollCapture()), null));
             // Room under every tool for the chevron, so the names stand in one line
             foreach (ToolStripItem tool in tools.Items)
@@ -142,7 +154,11 @@ namespace Greenshot.Editor.Forms
             var rulerButton = NewAction("눈금자", "가로·세로 눈금자 보이기/숨기기", "ruler.Image", (s, e) => SetRulersShown(((ToolStripButton)s).Checked));
             rulerButton.CheckOnClick = true;
             rulerButton.Checked = true;
-            AddRibbonGroup(view, "표시", (rulerButton, null));
+            // 왕샷: the recent captures, left of the canvas
+            _recentCapturesButton = NewAction("최근 캡처", "왼쪽에 최근 캡처를 보여줘요. 썸네일을 캔버스로 끌어다 놓으면 그림으로 들어가고, 두 번 클릭하면 새 탭에서 열려요",
+                "recentCaptures.Image", (s, e) => SetRecentCapturesPanelShown(((ToolStripButton)s).Checked));
+            _recentCapturesButton.CheckOnClick = true;
+            AddRibbonGroup(view, "표시", (rulerButton, null), (_recentCapturesButton, null));
 
             // ---- Share
             AddRibbonGroup(share, "복사", (btnClipboard, "클립보드"));
@@ -204,6 +220,113 @@ namespace Greenshot.Editor.Forms
             if (Width < MinimumSize.Width)
             {
                 Width = MinimumSize.Width;
+            }
+
+            // WangShot: the panel with the recent captures, if it was shown the last time
+            if (EditorConfiguration.RecentCapturesPanelShown)
+            {
+                SetRecentCapturesPanelShown(true);
+            }
+        }
+
+        /// <summary>
+        /// 왕샷: the emphasis tools, in one button with a chevron: spotlicht (everything but the area dark), magnifying glass and click mark.
+        /// The spotlight and the magnifying glass are the highlight tool with their preset, the click mark is an element of its own.
+        /// </summary>
+        private void CreateEmphasisTools()
+        {
+            _spotlightTool = NewAction("스포트라이트", "스포트라이트: 선택한 영역만 밝게 남기고 나머지는 어둡게 해요 (드래그)", "areaHighlightMenuItem.Image",
+                (s, e) => StartHighlightTool(FilterContainer.PreparedFilter.SPOTLIGHT));
+            _magnifyTool = NewAction("돋보기", "돋보기: 선택한 영역의 가운데를 동그란 렌즈로 확대해 보여줘요 (드래그)", "magnifyMenuItem.Image",
+                (s, e) => StartHighlightTool(FilterContainer.PreparedFilter.MAGNIFY_LENS));
+            _clickMarkTool = NewAction("클릭 표시", "클릭 표시: 클릭한 지점에 동그라미를 그려요 (크기는 나중에 조절할 수 있어요)", "clickMark.Image",
+                (s, e) => StartDrawingMode(DrawingModes.ClickMark));
+            _emphasisTool = new ToolStripDropButton();
+            _emphasisTool.SetMembers((_spotlightTool, "스포트라이트"), (_magnifyTool, "돋보기"), (_clickMarkTool, "클릭 표시"));
+
+            // The preset of the highlight tool can be changed in the properties, too: the two new presets are there as well
+            var spotlightPreset = new ToolStripMenuItem("스포트라이트") { Tag = FilterContainer.PreparedFilter.SPOTLIGHT };
+            IconBinder.Bind(spotlightPreset, IconSource.FromResource(typeof(ImageEditorForm), "areaHighlightMenuItem.Image"));
+            var magnifyPreset = new ToolStripMenuItem("돋보기") { Tag = FilterContainer.PreparedFilter.MAGNIFY_LENS };
+            IconBinder.Bind(magnifyPreset, IconSource.FromResource(typeof(ImageEditorForm), "magnifyMenuItem.Image"));
+            highlightModeButton.DropDownItems.Add(spotlightPreset);
+            highlightModeButton.DropDownItems.Add(magnifyPreset);
+
+            // 왕샷: the solid block is a third way to hide something, next to the mosaic and the blur
+            var solidPreset = new ToolStripMenuItem("단색") { Tag = FilterContainer.PreparedFilter.SOLID, ToolTipText = "가린 곳을 한 가지 색으로 덮어요 (색은 아래 색 팔레트에서)" };
+            IconBinder.Bind(solidPreset, IconSource.FromResource(typeof(ImageEditorForm), "solidToolStripMenuItem.Image"));
+            obfuscateModeButton.DropDownItems.Add(solidPreset);
+        }
+
+        private void StartHighlightTool(FilterContainer.PreparedFilter preset)
+        {
+            var presetField = _surface.FieldAggregator.GetField(FieldType.PREPARED_FILTER_HIGHLIGHT);
+            if (presetField != null)
+            {
+                presetField.Value = preset;
+            }
+
+            StartDrawingMode(DrawingModes.Highlight);
+        }
+
+        /// <summary>
+        /// Start a tool: the canvas draws with it, and its button is the checked one
+        /// </summary>
+        private void StartDrawingMode(DrawingModes drawingMode)
+        {
+            _surface.DrawingMode = drawingMode;
+            RefreshFieldControls();
+        }
+
+        /// <summary>
+        /// 왕샷: show or hide the recent captures left of the canvas, the choice is remembered
+        /// </summary>
+        private void SetRecentCapturesPanelShown(bool shown)
+        {
+            if (_recentCapturesPanel == null)
+            {
+                if (!shown)
+                {
+                    return;
+                }
+
+                _recentCapturesPanel = new RecentCapturesPanel(this);
+                var content = topToolStripContainer.ContentPanel;
+                content.Controls.Add(_recentCapturesPanel);
+                // The tab strip is docked first (it is at the end of the collection), then the panel at the left, the canvas fills the rest
+                content.Controls.SetChildIndex(_recentCapturesPanel, content.Controls.Count - 2);
+            }
+
+            _recentCapturesPanel.Visible = shown;
+            EditorConfiguration.RecentCapturesPanelShown = shown;
+            if (_recentCapturesButton != null)
+            {
+                _recentCapturesButton.Checked = shown;
+            }
+        }
+
+        /// <summary>
+        /// 왕샷: a capture of the recent captures panel opens in a new tab
+        /// </summary>
+        internal void OpenRecentCaptureInNewTab(string path)
+        {
+            try
+            {
+                var image = ImageIO.LoadImage(path);
+                if (image == null)
+                {
+                    MessageBox.Show(this, "이 파일은 이미지로 열 수 없어요.", "왕샷", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                var surface = new Surface(image);
+                surface.CaptureDetails.Title = Path.GetFileNameWithoutExtension(path);
+                AddTab(surface, outputMade: true, fitWindow: false);
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("Could not open the capture in a new tab: " + path, ex);
+                MessageBox.Show(this, "이미지를 열지 못했어요.", "왕샷", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
 

@@ -241,6 +241,21 @@ namespace Greenshot.Editor.Drawing
         [NonSerialized] private IDrawableContainer _mouseDownElement;
 
         /// <summary>
+        /// 왕샷: the bounds of what is dragged and where the drag started, to snap the elements to the guides while dragging
+        /// </summary>
+        [NonSerialized] private NativeRect _dragStartBounds;
+
+        /// <summary>
+        /// 왕샷: the guide lines which are shown while elements are dragged: true for a vertical line, and its position in the image
+        /// </summary>
+        [NonSerialized] private readonly List<(bool Vertical, int Position)> _alignmentGuides = new();
+
+        /// <summary>
+        /// 왕샷: a drag with Alt makes a copy of the selection, but only when the mouse really moves
+        /// </summary>
+        [NonSerialized] private bool _copyOnFirstMove;
+
+        /// <summary>
         /// all selected elements, do not serialize
         /// </summary>
         [NonSerialized] private readonly IDrawableContainerList selectedElements;
@@ -1506,6 +1521,9 @@ namespace Greenshot.Editor.Drawing
                 case DrawingModes.Emoji:
                     _undrawnElement = new EmojiContainer(this);
                     break;
+                case DrawingModes.ClickMark:
+                    _undrawnElement = new ClickMarkContainer(this);
+                    break;
             }
 
             if (_undrawnElement != null)
@@ -1646,6 +1664,12 @@ namespace Greenshot.Editor.Drawing
         private static readonly string[] DroppableImageExtensions = { ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tif", ".tiff", ".webp", ".ico", ".jfif" };
 
         /// <summary>
+        /// 왕샷: the format of a capture dragged from the recent captures panel of the editor: the file name, to put that image
+        /// into the canvas instead of opening it in a new tab
+        /// </summary>
+        internal const string RecentCaptureFormat = "WangShot.RecentCapture";
+
+        /// <summary>
         /// 왕샷: image files dragged from the explorer
         /// </summary>
         internal static string[] GetDroppedImageFiles(IDataObject data)
@@ -1673,6 +1697,13 @@ namespace Greenshot.Editor.Drawing
         private void OnDragEnter(object sender, DragEventArgs e)
         {
             e.Effect = DragDropEffects.None;
+            // 왕샷: a capture of the recent captures panel goes into the canvas
+            if (e.Data != null && e.Data.GetDataPresent(RecentCaptureFormat))
+            {
+                e.Effect = DragDropEffects.Copy;
+                return;
+            }
+
             if (GetDroppedImageFiles(e.Data) != null)
             {
                 e.Effect = DragDropEffects.Copy;
@@ -1729,6 +1760,27 @@ namespace Greenshot.Editor.Drawing
         /// <param name="e"></param>
         private void OnDragDrop(object sender, DragEventArgs e)
         {
+            // 왕샷: a capture of the recent captures panel is put into the canvas where it is dropped
+            if (e.Data != null && e.Data.GetDataPresent(RecentCaptureFormat) && e.Data.GetData(RecentCaptureFormat) is string capturePath)
+            {
+                NativePoint dropPoint = ToImageCoordinates(PointToClient(new NativePoint(e.X, e.Y)));
+                try
+                {
+                    DeselectAllElements();
+                    var container = AddImageContainer(capturePath, dropPoint.X, dropPoint.Y);
+                    if (container != null)
+                    {
+                        SelectElement(container);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LOG.Warn("Could not put the capture into the canvas: " + capturePath, ex);
+                }
+
+                return;
+            }
+
             var droppedFiles = GetDroppedImageFiles(e.Data);
             if (droppedFiles != null)
             {
@@ -2776,7 +2828,220 @@ namespace Greenshot.Editor.Drawing
                 if (_mouseDownElement != null)
                 {
                     _mouseDownElement.Status = EditStatus.MOVING;
+                    // 왕샷: the guides of the other elements, and Alt+drag copies the selection
+                    _dragStartBounds = _mouseDownElement.Selected ? SelectedBounds() : _mouseDownElement.Bounds.Normalize();
+                    _copyOnFirstMove = _mouseDownElement.Selected && selectedElements.Count > 0 && (InputState.ModifierKeys & Keys.Alt) == Keys.Alt;
                 }
+            }
+        }
+
+        /// <summary>
+        /// 왕샷: how close an element has to be to a guide line to snap to it, in image pixels
+        /// </summary>
+        private const int GuideSnapDistance = 8;
+
+        /// <summary>
+        /// 왕샷: Alt+drag: the selection is copied and the copies are dragged, like in Office. The copies are exactly on the originals,
+        /// so the drag moves them away from there.
+        /// </summary>
+        private void CopySelectionForDrag()
+        {
+            var copies = selectedElements.Clone();
+            if (copies.Count == 0)
+            {
+                return;
+            }
+
+            copies.Parent = this;
+            AddElements(copies);
+            DeselectAllElements();
+            SelectElements(copies);
+            _mouseDownElement = copies.FirstOrDefault();
+            if (_mouseDownElement != null)
+            {
+                _mouseDownElement.Status = EditStatus.MOVING;
+            }
+
+            _dragStartBounds = SelectedBounds();
+        }
+
+        /// <summary>
+        /// 왕샷: the bounds of the selected elements. The drawing bounds include the margin of the line, the guides use these bounds.
+        /// </summary>
+        private NativeRect SelectedBounds()
+        {
+            var bounds = NativeRect.Empty;
+            foreach (var element in selectedElements)
+            {
+                var elementBounds = element.Bounds.Normalize();
+                bounds = bounds.IsEmpty ? elementBounds : bounds.Union(elementBounds);
+            }
+
+            return bounds;
+        }
+
+        /// <summary>
+        /// 왕샷: snap the dragged bounds to the guide lines of the other elements, of the middle and of the edges of the image.
+        /// The guide lines which were found are shown while the element is dragged.
+        /// </summary>
+        /// <returns>How much the bounds have to move to be on the guides</returns>
+        private NativePoint SnapToGuides(NativeRect moving)
+        {
+            var guides = new List<(bool Vertical, int Position)>();
+            int offsetX = 0;
+            int offsetY = 0;
+
+            if (moving.Width > 0 && moving.Height > 0 && Image != null)
+            {
+                var verticals = new List<int>();
+                var horizontals = new List<int>();
+                foreach (var element in _elements)
+                {
+                    if (element.Selected || ReferenceEquals(element, _mouseDownElement) || element is CropContainer)
+                    {
+                        continue;
+                    }
+
+                    var bounds = element.Bounds.Normalize();
+                    verticals.Add(bounds.Left);
+                    verticals.Add(bounds.Left + bounds.Width / 2);
+                    verticals.Add(bounds.Right);
+                    horizontals.Add(bounds.Top);
+                    horizontals.Add(bounds.Top + bounds.Height / 2);
+                    horizontals.Add(bounds.Bottom);
+                }
+
+                // The edges and the middle of the image, too
+                verticals.Add(0);
+                verticals.Add(Image.Width / 2);
+                verticals.Add(Image.Width);
+                horizontals.Add(0);
+                horizontals.Add(Image.Height / 2);
+                horizontals.Add(Image.Height);
+
+                var movingXs = new[] { moving.Left, moving.Left + moving.Width / 2, moving.Right };
+                var movingYs = new[] { moving.Top, moving.Top + moving.Height / 2, moving.Bottom };
+
+                offsetX = FindSnap(movingXs, verticals, out int guideX);
+                offsetY = FindSnap(movingYs, horizontals, out int guideY);
+                if (guideX != int.MinValue)
+                {
+                    guides.Add((true, guideX));
+                }
+
+                if (guideY != int.MinValue)
+                {
+                    guides.Add((false, guideY));
+                }
+            }
+
+            SetAlignmentGuides(guides);
+            return new NativePoint(offsetX, offsetY);
+        }
+
+        /// <summary>
+        /// The best guide for the edges of the dragged element, or int.MinValue when none is close enough
+        /// </summary>
+        private static int FindSnap(int[] movingEdges, List<int> targets, out int guide)
+        {
+            guide = int.MinValue;
+            int bestDistance = GuideSnapDistance + 1;
+            int offset = 0;
+            foreach (int target in targets)
+            {
+                foreach (int edge in movingEdges)
+                {
+                    int distance = Math.Abs(target - edge);
+                    if (distance > GuideSnapDistance || distance >= bestDistance)
+                    {
+                        continue;
+                    }
+
+                    bestDistance = distance;
+                    offset = target - edge;
+                    guide = target;
+                }
+            }
+
+            return offset;
+        }
+
+        /// <summary>
+        /// Remember the guide lines of the drag, and repaint the canvas when they change
+        /// </summary>
+        private void SetAlignmentGuides(List<(bool Vertical, int Position)> guides)
+        {
+            bool changed = guides.Count != _alignmentGuides.Count;
+            if (!changed)
+            {
+                for (int i = 0; i < guides.Count; i++)
+                {
+                    if (guides[i] != _alignmentGuides[i])
+                    {
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!changed)
+            {
+                return;
+            }
+
+            _alignmentGuides.Clear();
+            _alignmentGuides.AddRange(guides);
+            Invalidate();
+        }
+
+        /// <summary>
+        /// The guide lines are gone when the drag ends
+        /// </summary>
+        private void ClearAlignmentGuides()
+        {
+            _copyOnFirstMove = false;
+            if (_alignmentGuides.Count == 0)
+            {
+                return;
+            }
+
+            _alignmentGuides.Clear();
+            Invalidate();
+        }
+
+        /// <summary>
+        /// 왕샷: the guide lines, while an element is dragged over the canvas
+        /// </summary>
+        private void PaintAlignmentGuides(Graphics graphics)
+        {
+            if (_alignmentGuides.Count == 0 || Image == null)
+            {
+                return;
+            }
+
+            var state = graphics.Save();
+            try
+            {
+                graphics.SmoothingMode = SmoothingMode.None;
+                using var pen = new Pen(Color.FromArgb(235, 0, 120, 212));
+                pen.DashPattern = new[] { 4f, 4f };
+                foreach (var (vertical, position) in _alignmentGuides)
+                {
+                    if (vertical)
+                    {
+                        var line = ToSurfaceCoordinates(new NativeRect(position, 0, 0, Image.Height));
+                        graphics.DrawLine(pen, line.X, line.Y, line.X, line.Bottom);
+                    }
+                    else
+                    {
+                        var line = ToSurfaceCoordinates(new NativeRect(0, position, Image.Width, 0));
+                        graphics.DrawLine(pen, line.X, line.Y, line.Right, line.Y);
+                    }
+                }
+            }
+            finally
+            {
+                graphics.Restore(state);
             }
         }
 
@@ -2787,7 +3052,8 @@ namespace Greenshot.Editor.Drawing
         /// <param name="e"></param>
         private void SurfaceMouseUp(object sender, MouseEventArgs e)
         {
-            NativePoint surfacePoint = e.Location;
+            // 왕샷: the guide lines are only there while an element is dragged
+            ClearAlignmentGuides();            NativePoint surfacePoint = e.Location;
             e = InverseZoomMouseCoordinates(e);
 
             // Handle Adorners
@@ -3222,6 +3488,20 @@ namespace Greenshot.Editor.Drawing
                 // an element is currently dragged
                 _mouseDownElement.Invalidate();
                 selectedElements.Invalidate();
+
+                // 왕샷: Alt+drag copies the selection, but a click without a drag must not leave a copy behind
+                if (_copyOnFirstMove && (currentMouse.X != _mouseStart.X || currentMouse.Y != _mouseStart.Y))
+                {
+                    _copyOnFirstMove = false;
+                    CopySelectionForDrag();
+                }
+
+                int deltaX = currentMouse.X - _mouseStart.X;
+                int deltaY = currentMouse.Y - _mouseStart.Y;
+                // 왕샷: the guide lines of the other elements and the edges of the image snap the dragged element
+                var wanted = new NativeRect(_dragStartBounds.X + deltaX, _dragStartBounds.Y + deltaY, _dragStartBounds.Width, _dragStartBounds.Height);
+                NativePoint snap = SnapToGuides(wanted);
+
                 // Move the element
                 if (_mouseDownElement.Selected)
                 {
@@ -3233,7 +3513,7 @@ namespace Greenshot.Editor.Drawing
                     }
 
                     // dragged element has been selected before -> move all
-                    selectedElements.MoveBy(currentMouse.X - _mouseStart.X, currentMouse.Y - _mouseStart.Y);
+                    selectedElements.MoveBy(deltaX + snap.X, deltaY + snap.Y);
                 }
                 else
                 {
@@ -3245,9 +3525,11 @@ namespace Greenshot.Editor.Drawing
                     }
 
                     // dragged element is not among selected elements -> just move dragged one
-                    _mouseDownElement.MoveBy(currentMouse.X - _mouseStart.X, currentMouse.Y - _mouseStart.Y);
+                    _mouseDownElement.MoveBy(deltaX + snap.X, deltaY + snap.Y);
                 }
 
+                // The position without the snap is the base for the next move, otherwise a short move back would jump
+                _dragStartBounds = wanted;
                 _mouseStart = currentMouse;
                 // Repaint where they are now: all selected elements moved, not only the dragged one
                 _mouseDownElement.Invalidate();
@@ -3469,6 +3751,8 @@ namespace Greenshot.Editor.Drawing
                 }
             }
 
+            // 왕샷: the lines the dragged element snaps to
+            PaintAlignmentGuides(targetGraphics);
             PaintFocusFrame(targetGraphics);
         }
 
@@ -4619,6 +4903,7 @@ namespace Greenshot.Editor.Drawing
             {
                 case DrawingModes.StepLabel:
                 case DrawingModes.Emoji:
+                case DrawingModes.ClickMark:
                     // These have their size and are placed with their middle at the mouse
                     start = center;
                     end = center;
