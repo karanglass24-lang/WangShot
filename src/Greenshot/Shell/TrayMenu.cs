@@ -48,6 +48,7 @@ using Greenshot.Base.Wpf;
 using Greenshot.Helpers;
 using Greenshot.Recipes;
 using Greenshot.Recipes.Triggers;
+using Greenshot.Views;
 using log4net;
 
 namespace Greenshot.Shell
@@ -201,6 +202,7 @@ namespace Greenshot.Shell
 
             AddItem(menu, Texts.Core.ContextmenuOpenfile, "contextmenu_openfile.Image", () => TrayActions.CaptureFile());
             AddItem(menu, "편집기 열기", "contextmenu_openeditor.Image", TrayActions.OpenEmptyEditor);
+            AddItem(menu, "최근 캡처", "contextmenu_capturelastregion.Image", () => RecentCapturesWindow.ShowWindow(_shell.OwnerHandle));
             menu.Items.Add(ThemedMenu.CreateSeparator());
 
             // The save folder and the file prefix are in the settings (output page)
