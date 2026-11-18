@@ -256,6 +256,11 @@ namespace Greenshot.Editor.Drawing
         [NonSerialized] private bool _copyOnFirstMove;
 
         /// <summary>
+        /// 왕샷: 그리기 중 마우스가 이미지 영역 밖으로 나가서 일시 중단된 상태인지
+        /// </summary>
+        [NonSerialized] private bool _drawingSuspended;
+
+        /// <summary>
         /// all selected elements, do not serialize
         /// </summary>
         [NonSerialized] private readonly IDrawableContainerList selectedElements;
@@ -3074,6 +3079,7 @@ namespace Greenshot.Editor.Drawing
 
             _mouseDown = false;
             _mouseDownElement = null;
+            _drawingSuspended = false;
             if (DrawingMode == DrawingModes.None)
             {
                 // check whether an existing element was clicked
@@ -3538,7 +3544,50 @@ namespace Greenshot.Editor.Drawing
             }
             else if (_drawingElement != null)
             {
-                _drawingElement.HandleMouseMove(currentMouse.X, currentMouse.Y);
+                // 왕샷: 그리기 중 마우스가 이미지 영역 밖으로 나가면 그리기를 일시 중단
+                if (Image != null && !IsInsideImage(currentMouse))
+                {
+                    if (!_drawingSuspended)
+                    {
+                        CancelDrawingElement();
+                        _drawingSuspended = true;
+                    }
+                }
+                else
+                {
+                    // 왕샷: 일시 중단 상태에서 이미지 영역 안으로 다시 들어오면 그리기 재개
+                    if (_drawingSuspended)
+                    {
+                        _drawingSuspended = false;
+                        StartDrawingElement(currentMouse);
+                    }
+                    else
+                    {
+                        _drawingElement.HandleMouseMove(currentMouse.X, currentMouse.Y);
+                        _modified = true;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 왕샷: 주어진 점이 이미지 영역(0,0 ~ Image.Width,Image.Height) 안에 있는지 확인
+        /// </summary>
+        private bool IsInsideImage(Point point)
+        {
+            return point.X >= 0 && point.Y >= 0 && point.X < Image.Width && point.Y < Image.Height;
+        }
+
+        /// <summary>
+        /// 왕샷: 현재 그려지고 있는 요소를 취소하고 정리
+        /// </summary>
+        private void CancelDrawingElement()
+        {
+            if (_drawingElement != null)
+            {
+                _drawingElement.Invalidate();
+                _elements.Remove(_drawingElement);
+                _drawingElement = null;
                 _modified = true;
             }
         }
