@@ -4226,6 +4226,173 @@ namespace Greenshot.Editor.Drawing
             DrawableContainerClipboard.Copy(selectedElements);
         }
 
+        // ===== 왕샷: 리본 새 기능들 =====
+
+        /// <summary>
+        /// 서식 복사: 선택한 개체의 색/선/글꼴 저장
+        /// </summary>
+        public void CopyFormat()
+        {
+            if (!HasSelectedElements) return;
+            var element = selectedElements.FirstOrDefault() as DrawableContainer;
+            if (element != null)
+            {
+                _copiedFormat = element.CloneFormat();
+            }
+        }
+
+        private FormatSnapshot _copiedFormat;
+
+        /// <summary>
+        /// 서식 붙여넣기: 다른 개체에 저장된 서식 적용
+        /// </summary>
+        public void PasteFormat()
+        {
+            if (!HasSelectedElements || _copiedFormat == null) return;
+            foreach (var element in selectedElements.OfType<DrawableContainer>())
+            {
+                element.ApplyFormat(_copiedFormat);
+            }
+            Invalidate();
+            _modified = true;
+        }
+
+        /// <summary>
+        /// 선택한 개체 수평/수직 뒤집기
+        /// </summary>
+        public void FlipSelected(bool horizontal)
+        {
+            if (!HasSelectedElements) return;
+            foreach (var element in selectedElements.OfType<DrawableContainer>())
+            {
+                element.Flip(horizontal);
+            }
+            Invalidate();
+            _modified = true;
+        }
+
+        /// <summary>
+        /// 자유 변형 모드 시작
+        /// </summary>
+        public void StartFreeTransform()
+        {
+            if (!HasSelectedElements) return;
+            foreach (var element in selectedElements.OfType<DrawableContainer>())
+            {
+                element.StartFreeTransform();
+            }
+            Invalidate();
+        }
+
+        /// <summary>
+        /// 크기 지정 대화상자 표시
+        /// </summary>
+        public void ShowResizeDialog()
+        {
+            if (!HasSelectedElements) return;
+            var element = selectedElements.FirstOrDefault() as DrawableContainer;
+            element?.ShowResizeDialog();
+        }
+
+        /// <summary>
+        /// 선택한 개체 그룹화 (TODO: proper group container implementation)
+        /// </summary>
+        public void GroupSelected()
+        {
+            if (!HasSelectedElements || selectedElements.Count < 2) return;
+            // TODO: Implement proper IDrawableContainer group container
+            LOG.Info("GroupSelected: Not fully implemented yet");
+        }
+
+        /// <summary>
+        /// 그룹 해제 (TODO: proper group container implementation)
+        /// </summary>
+        public void UngroupSelected()
+        {
+            if (!HasSelectedElements) return;
+            // TODO: Implement proper IDrawableContainer group container
+            LOG.Info("UngroupSelected: Not fully implemented yet");
+        }
+
+        /// <summary>
+        /// 선택한 개체 병합
+        /// </summary>
+        public void MergeSelected()
+        {
+            if (!HasSelectedElements || selectedElements.Count < 2) return;
+            // 비트맵으로 렌더링 후 이미지 컨테이너로 변환
+            var bounds = selectedElements.DrawingBounds;
+            var image = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppArgb);
+            using (var g = Graphics.FromImage(image))
+            {
+                g.Clear(Color.Transparent);
+                // Z-order: elements later in _elements list are on top
+                foreach (var element in _elements.OfType<DrawableContainer>()
+                    .Where(e => selectedElements.Contains(e))
+                    .OrderBy(e => _elements.IndexOf(e)))
+                {
+                    element.Draw(g, RenderMode.EDIT);
+                }
+            }
+            var container = new ImageContainer(this) { Image = image, Left = bounds.X, Top = bounds.Y };
+            foreach (var element in selectedElements.ToList())
+            {
+                RemoveElement(element);
+            }
+            AddElement(container);
+            SelectElement(container);
+            _modified = true;
+        }
+
+        /// <summary>
+        /// 템플릿으로 저장
+        /// </summary>
+        public void SaveAsTemplate()
+        {
+            if (!HasSelectedElements) return;
+            // TODO: 템플릿 저장 구현
+        }
+
+        /// <summary>
+        /// 그리드 표시 토글
+        /// </summary>
+        public bool ShowGrid { get; set; }
+
+        /// <summary>
+        /// 캔버스 중앙 정렬
+        /// </summary>
+        public void CenterCanvas()
+        {
+            if (Image == null) return;
+            var visibleArea = GetVisibleArea();
+            var centerX = (Image.Width - visibleArea.Width) / 2;
+            var centerY = (Image.Height - visibleArea.Height) / 2;
+            // The scroll position is managed by the panel in ImageEditorForm
+            // We'll use the ScrollPosition property if available
+            var scrollX = centerX;
+            var scrollY = centerY;
+            // This will be called from ImageEditorForm which has access to the panel
+        }
+
+        /// <summary>
+        /// 캔버스 여백 설정 대화상자
+        /// </summary>
+        public void ShowCanvasMarginDialog()
+        {
+            // TODO: 여백 설정 대화상자 구현
+        }
+
+        /// <summary>
+        /// OCR 텍스트 복사
+        /// </summary>
+        public void CopyOcrText()
+        {
+            var lines = OcrLinesOfCapture();
+            if (lines.Count == 0) return;
+            var text = string.Join("\n", lines.Select(l => l.Text));
+            ClipboardHelper.SetClipboardData(text);
+        }
+
         /// <summary>
         /// This method is called to confirm/cancel.
         /// Called when pressing enter or using the "check" in the editor.

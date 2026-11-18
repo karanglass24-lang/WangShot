@@ -44,6 +44,23 @@ using log4net;
 namespace Greenshot.Editor.Drawing
 {
     /// <summary>
+    /// 왕샷: 개체 서식(색상, 선, 글꼴 등) 스냅샷 - 서식 복사/붙여넣기용
+    /// </summary>
+    [Serializable]
+    public class FormatSnapshot
+    {
+        public Color FillColor { get; set; } = Color.Transparent;
+        public Color LineColor { get; set; } = Color.Transparent;
+        public int LineThickness { get; set; } = 0;
+        public string FontFamily { get; set; }
+        public float FontSize { get; set; } = 0f;
+        public bool FontBold { get; set; } = false;
+        public bool FontItalic { get; set; } = false;
+        public string TextAlignment { get; set; }
+        public bool Shadow { get; set; } = false;
+    }
+
+    /// <summary>
     /// represents a rectangle, ellipse, label or whatever. Can contain filters, too.
     /// serializable for clipboard support
     /// Subclasses should fulfill INotifyPropertyChanged contract, i.e. call
@@ -796,6 +813,82 @@ namespace Greenshot.Editor.Drawing
             // Offset the raw bounds so negative dimensions keep their direction.
             this.ApplyBounds(new NativeRectFloat(Left + dx, Top + dy, Width, Height));
             this.Invalidate();
+        }
+
+        // ===== 왕샷: 서식 복사/붙여넣기 =====
+
+        /// <summary>
+        /// 현재 개체의 서식(색상, 선, 글꼴 등) 스냅샷 생성
+        /// </summary>
+        public FormatSnapshot CloneFormat()
+        {
+            return new FormatSnapshot
+            {
+                FillColor = HasField(FieldType.FILL_COLOR) ? GetFieldValueAsColor(FieldType.FILL_COLOR) : Color.Transparent,
+                LineColor = HasField(FieldType.LINE_COLOR) ? GetFieldValueAsColor(FieldType.LINE_COLOR) : Color.Transparent,
+                LineThickness = HasField(FieldType.LINE_THICKNESS) ? GetFieldValueAsInt(FieldType.LINE_THICKNESS) : 0,
+                FontFamily = HasField(FieldType.FONT_FAMILY) ? GetFieldValueAsString(FieldType.FONT_FAMILY) : null,
+                FontSize = HasField(FieldType.FONT_SIZE) ? GetFieldValueAsFloat(FieldType.FONT_SIZE) : 0f,
+                FontBold = HasField(FieldType.FONT_BOLD) ? GetFieldValueAsBool(FieldType.FONT_BOLD) : false,
+                FontItalic = HasField(FieldType.FONT_ITALIC) ? GetFieldValueAsBool(FieldType.FONT_ITALIC) : false,
+                TextAlignment = HasField(FieldType.TEXT_HORIZONTAL_ALIGNMENT) ? GetFieldValueAsString(FieldType.TEXT_HORIZONTAL_ALIGNMENT) : null,
+                Shadow = HasField(FieldType.SHADOW) ? GetFieldValueAsBool(FieldType.SHADOW) : false
+            };
+        }
+
+        /// <summary>
+        /// 저장된 서식 적용
+        /// </summary>
+        public virtual void ApplyFormat(FormatSnapshot format)
+        {
+            if (format == null) return;
+            if (HasField(FieldType.FILL_COLOR)) SetFieldValue(FieldType.FILL_COLOR, format.FillColor);
+            if (HasField(FieldType.LINE_COLOR)) SetFieldValue(FieldType.LINE_COLOR, format.LineColor);
+            if (HasField(FieldType.LINE_THICKNESS)) SetFieldValue(FieldType.LINE_THICKNESS, format.LineThickness);
+            if (HasField(FieldType.FONT_FAMILY) && format.FontFamily != null) SetFieldValue(FieldType.FONT_FAMILY, format.FontFamily);
+            if (HasField(FieldType.FONT_SIZE) && format.FontSize > 0) SetFieldValue(FieldType.FONT_SIZE, format.FontSize);
+            if (HasField(FieldType.FONT_BOLD)) SetFieldValue(FieldType.FONT_BOLD, format.FontBold);
+            if (HasField(FieldType.FONT_ITALIC)) SetFieldValue(FieldType.FONT_ITALIC, format.FontItalic);
+            if (HasField(FieldType.TEXT_HORIZONTAL_ALIGNMENT) && format.TextAlignment != null) SetFieldValue(FieldType.TEXT_HORIZONTAL_ALIGNMENT, format.TextAlignment);
+            if (HasField(FieldType.SHADOW)) SetFieldValue(FieldType.SHADOW, format.Shadow);
+            Invalidate();
+        }
+
+        /// <summary>
+        /// 수평/수직 뒤집기
+        /// </summary>
+        public virtual void Flip(bool horizontal)
+        {
+            var bounds = Bounds;
+            if (horizontal)
+            {
+                Left = bounds.Left;
+                Width = -Width;
+            }
+            else
+            {
+                Top = bounds.Top;
+                Height = -Height;
+            }
+            Invalidate();
+        }
+
+        /// <summary>
+        /// 자유 변형 모드 시작
+        /// </summary>
+        public virtual void StartFreeTransform()
+        {
+            // 기본 구현: 선택 상태로 두고 리사이즈 아도너 표시
+            Status = EditStatus.RESIZING;
+            Invalidate();
+        }
+
+        /// <summary>
+        /// 크기 지정 대화상자 표시
+        /// </summary>
+        public virtual void ShowResizeDialog()
+        {
+            // TODO: 크기 지정 대화상자 구현
         }
     }
 }
