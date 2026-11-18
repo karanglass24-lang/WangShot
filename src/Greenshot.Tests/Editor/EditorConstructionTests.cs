@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.Runtime.ExceptionServices;
 using System.Threading;
+using Greenshot.Base.Interfaces;
 using Greenshot.Editor.Drawing;
 using Greenshot.Editor.Forms;
 using Xunit;
@@ -22,6 +23,9 @@ namespace Greenshot.Tests.Editor
                     using var surface = new Surface(new Bitmap(100, 100));
                     using var editor = new ImageEditorForm(surface, true);
                     Assert.NotNull(editor);
+                    // Selecting the text tool binds an integer line thickness to the format tab.
+                    surface.DrawingMode = DrawingModes.Text;
+                    Assert.Equal(DrawingModes.Text, surface.DrawingMode);
                 }
                 catch (Exception exception)
                 {

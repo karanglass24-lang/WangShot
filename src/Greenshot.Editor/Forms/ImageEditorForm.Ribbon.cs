@@ -598,7 +598,7 @@ namespace Greenshot.Editor.Forms
             Bind(_formatShadowButton, "Checked", fields.GetField(FieldType.SHADOW), "Value", NotNullValidator.GetInstance());
             Bind(_formatLineColorButton, "SelectedColor", fields.GetField(FieldType.LINE_COLOR), "Value", NotNullValidator.GetInstance());
             Bind(_formatFillColorButton, "SelectedColor", fields.GetField(FieldType.FILL_COLOR), "Value", NotNullValidator.GetInstance());
-            Bind(_formatLineThicknessUpDown, "Value", fields.GetField(FieldType.LINE_THICKNESS), "Value", DecimalFloatConverter.GetInstance(), NotNullValidator.GetInstance());
+            Bind(_formatLineThicknessUpDown, "Value", fields.GetField(FieldType.LINE_THICKNESS), "Value", DecimalIntConverter.GetInstance(), NotNullValidator.GetInstance());
         }
 
         /// <summary>
