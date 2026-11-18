@@ -9,7 +9,7 @@ namespace Greenshot.Helpers
     {
         public const string Name = "왕샷";
 
-        public const string Version = "1.3.0";
+        public const string Version = "1.4.0";
 
         public static Version CurrentVersion => System.Version.Parse(Version);
 
