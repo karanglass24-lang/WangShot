@@ -2,7 +2,7 @@
 ;   ISCC.exe installer\wangshot.iss
 ; 먼저 빌드: dotnet build src\Greenshot\Greenshot.csproj -c Release
 #define AppName "왕샷"
-#define AppVersion "1.5.3"
+#define AppVersion "1.5.4"
 #define AppExe "WangShot.exe"
 #define BuildDir "..\src\Greenshot\bin\Release\net480"
 

@@ -61,7 +61,7 @@ namespace Greenshot.Base.Wpf
                 var coreConfig = IniConfigRegistry.GetSection<ICoreConfiguration>();
                 int size = coreConfig?.IconSize.Width ?? 16;
                 // 왕샷: the menus keep compact icons, the editor toolbars use the full icon size
-                return size > 0 ? Math.Min(size, 20) : 16;
+                return IconSizing.DisplaySize(size > 0 ? Math.Min(size, 20) : 16);
             }
         }
 

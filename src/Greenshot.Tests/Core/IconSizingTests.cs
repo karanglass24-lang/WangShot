@@ -29,6 +29,15 @@ namespace Greenshot.Tests.Core
     public class IconSizingTests
     {
         [Theory]
+        [InlineData(28, 25)]
+        [InlineData(20, 18)]
+        [InlineData(16, 14)]
+        public void DisplaySize_ReducesIconsByTenPercent(int original, int expected)
+        {
+            Assert.Equal(expected, IconSizing.DisplaySize(original));
+        }
+
+        [Theory]
         [InlineData(16, 96, 16)]
         [InlineData(16, 120, 20)]
         [InlineData(16, 144, 24)]

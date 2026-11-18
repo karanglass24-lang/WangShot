@@ -200,7 +200,7 @@ namespace Greenshot.Base.Controls
         public static int ApplyForDpi(ToolStrip toolStrip, int dpi, string name)
         {
             int baseSize = IconSizing.ConfiguredBaseSize;
-            int pixelSize = IconSizing.PixelSize(baseSize, dpi);
+            int pixelSize = IconSizing.DisplaySize(IconSizing.PixelSize(baseSize, dpi));
             if (toolStrip != null && toolStrip.ImageScalingSize.Height != pixelSize)
             {
                 Log.Info($"Icons for {name}: dpi {dpi}, base {baseSize} -> {pixelSize} px");

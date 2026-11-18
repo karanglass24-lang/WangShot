@@ -774,7 +774,7 @@ namespace Greenshot.Editor.Forms
             }
 
             // The quick access tools and the buttons in the corner are smaller
-            int small = Math.Max(16, (int)Math.Round(20 * dpi / 96.0));
+            int small = IconSizing.DisplaySize(Math.Max(16, (int)Math.Round(20 * dpi / 96.0)));
             foreach (var strip in _ribbon.SmallStrips)
             {
                 IconBinder.Apply(strip, small);
