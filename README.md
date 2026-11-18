@@ -46,6 +46,10 @@ msbuild src/Greenshot.sln /p:Configuration=Release /t:Rebuild /v:normal
 
 패치 버전은 4.1.2 / 3.2.0 라인인데 net480 지원 여부가 관건이라, 그걸 만족하는 버전이 나오면 올리고 이 억제들을 지우면 돼요.
 
+## 릴리스
+
+버전은 `src/Greenshot/Helpers/WangShotInfo.cs` 의 `Version` 과 `installer/wangshot.iss` 의 `AppVersion` 두 곳에 있어요. 두 값을 같이 올리면 `main` 에 푸시할 때 GitHub Actions 가 그 버전으로 설치 프로그램과 포터블 ZIP 을 만들어 `vX.Y.Z` 태그와 릴리스를 자동으로 올려요. 인앱 업데이트도 이 릴리스의 `WangShot-X.Y.Z-setup.exe` 를 내려받아 설치해요. (두 값이 다르면 워크플로가 빌드를 멈춰요.)
+
 ## 라이선스
 
 GPL-3.0-or-later. 원본 Greenshot 의 저작권은 Greenshot 개발자들에게 있고, 원본 설명서는 [README.greenshot.md](README.greenshot.md) 에 남겨 두었어요.

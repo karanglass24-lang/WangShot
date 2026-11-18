@@ -80,26 +80,35 @@ jobs:
         Picasa_ClientId: ${{ secrets.Picasa_ClientId }}
         Picasa_ClientSecret: ${{ secrets.Picasa_ClientSecret }}
 
-    # The Release build publishes greenshot-mcp.exe next to Greenshot.exe as its last step, after the checksums, the SBOM,
-    # the installers and the portable versions, so it is only in its own download
-    - name: Upload MCP server artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: artifacts-greenshot-mcp
-        path: src/Greenshot/bin/Release/net480/greenshot-mcp.exe
-        if-no-files-found: error
-
-    - name: Copy Files
+    # The release tag, the installer file name and the in-app version all come from these two numbers, so they must
+    # match: the updater compares the tag against WangShotInfo.Version of the installed copy
+    - name: Check the 왕샷 version of the installer
+      shell: pwsh
       run: |
-        mkdir -p ${{ github.workspace }}/artifacts
-        cp installer/WangShot-*-setup.exe ${{ github.workspace }}/artifacts/
-        cp installer/WangShot-Light-*-setup.exe ${{ github.workspace }}/artifacts/
-    
+        $app = (Select-String -Path src/Greenshot/Helpers/WangShotInfo.cs -Pattern 'Version = "([\d.]+)"').Matches[0].Groups[1].Value
+        $setup = (Select-String -Path installer/wangshot.iss -Pattern '#define AppVersion "([\d.]+)"').Matches[0].Groups[1].Value
+        Write-Host "왕샷 $app, installer $setup"
+        if ($app -ne $setup) {
+          throw "WangShotInfo.Version ($app) and installer/wangshot.iss AppVersion ($setup) differ."
+        }
+
+    # 왕샷 has its own installer (installer/wangshot.iss): its version is the 왕샷 version, the same one the About
+    # window and the in-app updater use, not the Greenshot version the build gives the upstream installer
+    - name: Build the 왕샷 installer
+      shell: cmd
+      run: |
+        set "ISCC=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
+        if not exist "%ISCC%" (
+          echo Inno Setup 6 was not found on the runner, the installer can't be built.
+          exit /b 1
+        )
+        "%ISCC%" /O"${{ github.workspace }}\artifacts-installer" installer\wangshot.iss
+
     - name: Upload Installer Artifact
       uses: actions/upload-artifact@v4
       with:
        name: artifacts-installer
-       path: ${{ github.workspace }}/artifacts
+       path: ${{ github.workspace }}/artifacts-installer
        if-no-files-found: error
 
     - name: Upload build artifacts
@@ -107,14 +116,6 @@ jobs:
       with:
         name: artifacts-greenshot-build
         path: src/Greenshot/bin/Release/net480/**
-        if-no-files-found: error
-
-    # Greenshot Light, its own build of Greenshot.exe (see Greenshot.csproj), for the Light portable version (the Light installer is built from it in the build)
-    - name: Upload light build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: artifacts-greenshot-light-build
-        path: src/Greenshot/bin/Release-Light/net480/**
         if-no-files-found: error
 
   pre_deploy:
@@ -182,12 +183,6 @@ jobs:
           name: artifacts-greenshot-build
           path: artifacts-greenshot-build
 
-      - name: Download light build artifacts
-        uses: actions/download-artifact@v5
-        with:
-          name: artifacts-greenshot-light-build
-          path: artifacts-greenshot-light-build
-
       - name: Prepare portable folder
         run: |
           $buildArtifacts = "${{ github.workspace }}/artifacts-greenshot-build"
@@ -195,26 +190,17 @@ jobs:
           pwsh -File "${{ github.workspace }}/prepare-portable.ps1" -RepositoryRootPath ${{ github.workspace }} -BuildArtifactsPath $buildArtifacts -OutputPath $portableDir
         shell: pwsh
 
-      - name: Prepare light portable folder
+      - name: Create ZIP archive
         run: |
-          $buildArtifacts = "${{ github.workspace }}/artifacts-greenshot-light-build"
-          $portableDir = "${{ github.workspace }}/portable-light"
-          pwsh -File "${{ github.workspace }}/prepare-portable.ps1" -RepositoryRootPath ${{ github.workspace }} -BuildArtifactsPath $buildArtifacts -OutputPath $portableDir -Light
-        shell: pwsh
-
-      - name: Create ZIP archives
-        run: |
-          $zipName = "WangShot-PORTABLE-${{ needs.pre_deploy.outputs.version }}.zip"
+          $zipName = "WangShot-v${{ needs.pre_deploy.outputs.version }}-win-x64.zip"
           Compress-Archive -Path "${{ github.workspace }}/portable/*" -DestinationPath $zipName -Force
-          $lightZipName = "WangShot-Light-PORTABLE-${{ needs.pre_deploy.outputs.version }}.zip"
-          Compress-Archive -Path "${{ github.workspace }}/portable-light/*" -DestinationPath $lightZipName -Force
         shell: pwsh
       
       - name: Upload portable build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: artifacts-greenshot-portable
-          path: WangShot-*PORTABLE-*.zip
+          path: WangShot-*.zip
           if-no-files-found: error
 
   deploy:
@@ -222,7 +208,7 @@ jobs:
     # Creates a GitHub Release
     # Creates a version tag if release branch
     # Trigger GitHub Pages rebuild
-    name: Deploy (continuous build)
+    name: Deploy
     runs-on: ubuntu-latest
     needs: 
       - pre_deploy
@@ -246,18 +232,6 @@ jobs:
           name: artifacts-greenshot-portable
           path: artifacts-greenshot-portable
 
-      - name: Download MCP server artifact
-        uses: actions/download-artifact@v5
-        with:
-          name: artifacts-greenshot-mcp
-          path: artifacts-greenshot-mcp
-
-      - name: Create MCP server ZIP
-        run: |
-          cd artifacts-greenshot-mcp
-          zip "Greenshot-MCP-${{ needs.pre_deploy.outputs.version }}-win-x64.zip" greenshot-mcp.exe
-        shell: bash
-
       - name: Create tag
         if: env.IS_MAIN_OR_RELEASE_BRANCH == 'true'
         run: |
@@ -272,15 +246,14 @@ jobs:
           branch="${BRANCH_NAME:-${GITHUB_REF#refs/heads/}}"
           sanitized=$(echo "$branch" | sed 's/[^a-zA-Z0-9._-]/_/g')
           mv artifacts-installer/WangShot-*-setup.exe "artifacts-installer/WangShot-${sanitized}-setup.exe"
-          mv artifacts-installer/WangShot-Light-*-setup.exe "artifacts-installer/WangShot-Light-${sanitized}-setup.exe"
         shell: bash
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "왕샷 (WangShot) ${{ needs.pre_deploy.outputs.version }} (continuous build)"
+          name: "왕샷 ${{ needs.pre_deploy.outputs.version }}"
           tag_name: ${{ needs.pre_deploy.outputs.tag_name }}
-          files: artifacts-installer/*.exe, artifacts-greenshot-portable/*.zip, artifacts-greenshot-mcp/*.zip
+          files: artifacts-installer/*.exe, artifacts-greenshot-portable/*.zip
           generate_release_notes: true
           draft: ${{ env.IS_MAIN_OR_RELEASE_BRANCH != 'true'  }}
           # 메인/릴리스 브랜치 빌드는 정식 릴리스로 표시돼요. 인앱 업데이터가 prerelease 는 건너뛰기 때문이에요.
