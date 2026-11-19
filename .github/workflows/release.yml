@@ -251,7 +251,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "왕샷 ${{ needs.pre_deploy.outputs.version }}"
+          name: "왕캡 ${{ needs.pre_deploy.outputs.version }}"
           tag_name: ${{ needs.pre_deploy.outputs.tag_name }}
           files: artifacts-installer/*.exe, artifacts-greenshot-portable/*.zip
           generate_release_notes: true

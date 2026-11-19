@@ -1,4 +1,4 @@
-# 왕샷 (WangShot)
+# 왕캡 (Wang_cap)
 
 교재·문서 집필용 스크린샷 프로그램. 오픈소스 [Greenshot](https://github.com/greenshot/greenshot)(GPL-3.0)을 기반으로 만들었어요.
 

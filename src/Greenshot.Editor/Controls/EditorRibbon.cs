@@ -158,7 +158,7 @@ namespace Greenshot.Editor.Controls
             public FlowLayoutPanel Body;
             public Rectangle Bounds;
             public bool Visible = true; // 컨텍스트 탭 표시/숨김용
-            public string KeyTip; // 왕샷: KeyTip 문자열 (예: "H" for Home)
+            public string KeyTip; // 왕캡: KeyTip 문자열 (예: "H" for Home)
         }
 
         private sealed class RibbonGroup
@@ -172,7 +172,7 @@ namespace Greenshot.Editor.Controls
         private readonly List<ToolStrip> _smallStrips = new();
         private readonly List<Panel> _groups = new();
         private readonly Dictionary<Panel, (ToolStrip Strip, Label Label)> _stripGroups = new();
-        private readonly List<RibbonGroup> _ribbonGroups = new(); // 왕샷: KeyTip용 그룹 정보
+        private readonly List<RibbonGroup> _ribbonGroups = new(); // 왕캡: KeyTip용 그룹 정보
         private readonly ToolStrip _headerRight;
         private readonly ToolStrip _quickAccess;
         private int _selected;
@@ -501,14 +501,14 @@ namespace Greenshot.Editor.Controls
             var label = new Label { Text = caption, AutoSize = false, Dock = DockStyle.Bottom, Height = Scale(20), TextAlign = ContentAlignment.MiddleCenter, UseMnemonic = false };
             var group = new Panel { Margin = Padding.Empty };
             palette.Location = new Point(Scale(2), Scale(2));
-            options.Size = new Size(Scale(330), palette.Height);
-            // Tidy rows like PicPick/Snagit: the same spacing everywhere, a label sits close to its field and the pairs keep a gap between them
-            options.Padding = new Padding(Scale(2), Scale(2), 0, 0);
+            // Office-style compact property rows, beside the three colour controls.
+            options.Size = new Size(Scale(250), palette.Height);
+            options.Padding = new Padding(Scale(4), Scale(2), 0, 0);
             void Tidy(ToolStripItem item)
             {
                 item.Margin = item is ToolStripLabel && !(item is ToolStripButton) && !(item is ToolStripDropDownItem)
-                    ? new Padding(Scale(8), Scale(3), Scale(2), Scale(3))
-                    : new Padding(Scale(2), Scale(2), Scale(2), Scale(2));
+                    ? new Padding(Scale(5), Scale(2), Scale(2), Scale(2))
+                    : new Padding(Scale(2), Scale(1), Scale(2), Scale(1));
                 if (item is ToolStripLabel label2 && !(item is ToolStripButton))
                 {
                     label2.TextAlign = ContentAlignment.MiddleLeft;

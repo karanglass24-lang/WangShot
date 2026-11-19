@@ -109,10 +109,10 @@ namespace Greenshot.Helpers
             }
 
             var answer = MessageBox.Show(
-                "Windows가 PrintScreen 키를 '캡처 도구(스니핑 도구)'에 사용하고 있어서 왕샷 단축키와 충돌할 수 있어요.\n\n" +
+                "Windows가 PrintScreen 키를 '캡처 도구(스니핑 도구)'에 사용하고 있어서 왕캡 단축키와 충돌할 수 있어요.\n\n" +
                 "Windows의 해당 설정을 끌까요? (현재 사용자 설정만 바뀌고, 설정 > 접근성 > 키보드에서 다시 켤 수 있어요)\n\n" +
                 "예: 설정 끄기\n아니요: 이번엔 그대로 두기\n취소: 다시 묻지 않기",
-                "왕샷 - PrintScreen 충돌 방지",
+                "왕캡 - PrintScreen 충돌 방지",
                 MessageBoxButtons.YesNoCancel,
                 MessageBoxIcon.Question);
 
@@ -121,7 +121,7 @@ namespace Greenshot.Helpers
                 case DialogResult.Yes:
                     if (DisableWindowsSnippingOnPrintScreen())
                     {
-                        MessageBox.Show("설정을 껐어요. 이미 열려 있는 프로그램은 다시 로그인하거나 재부팅해야 적용될 수 있어요.", "왕샷", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        MessageBox.Show("설정을 껐어요. 이미 열려 있는 프로그램은 다시 로그인하거나 재부팅해야 적용될 수 있어요.", "왕캡", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
                     else
                     {

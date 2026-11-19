@@ -430,6 +430,8 @@ namespace Greenshot.Editor.Forms
             }
 
             ApplyRibbonDpi(dpi);
+            // Property controls form compact rows, unlike the large ribbon commands.
+            IconBinder.Apply(propertiesToolStrip, IconSizing.DisplaySize(IconSizing.PixelSize(20, dpi)));
             propertiesToolStrip.MinimumSize = new Size(150, pixelSize + 10);
             if (pixelSize != _emojiButtonSize)
             {
@@ -837,7 +839,6 @@ namespace Greenshot.Editor.Forms
             // Rendered in the size of the icons, the tool strip mustn't scale it
             btnEmoji.ImageScaling = ToolStripItemImageScaling.None;
             btnEmoji.Image = image;
-            _emojiTool?.SyncImage();
         }
 
         private int _emojiButtonSize;

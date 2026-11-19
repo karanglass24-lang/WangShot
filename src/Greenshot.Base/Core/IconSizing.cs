@@ -72,10 +72,10 @@ namespace Greenshot.Base.Core
         public static int PixelSize(int dpi) => PixelSize(ConfiguredBaseSize, dpi);
 
         /// <summary>
-        /// Reduce UI icons by ten percent without changing the saved user preference.
+        /// Enlarge the previous compact UI icon size by five percent without changing the saved preference.
         /// </summary>
         public static int DisplaySize(int pixelSize) =>
-            Math.Max(1, (int)Math.Round(pixelSize * 0.9, MidpointRounding.AwayFromZero));
+            Math.Max(1, (int)Math.Round(Math.Round(pixelSize * 0.9, MidpointRounding.AwayFromZero) * 1.05, MidpointRounding.AwayFromZero));
 
         /// <summary>
         /// The configured icon size at 100% (BaseIconSize in greenshot.ini)

@@ -406,7 +406,7 @@ namespace Greenshot.Helpers
             }
             else
             {
-                await ShowMessageAsync($"이미 최신 버전이에요. (왕샷 {CurrentVersion})", MessageBoxIcon.Information).ConfigureAwait(false);
+                await ShowMessageAsync($"이미 최신 버전이에요. (왕캡 {CurrentVersion})", MessageBoxIcon.Information).ConfigureAwait(false);
             }
         }
 
@@ -417,7 +417,7 @@ namespace Greenshot.Helpers
         private static Task<int> ShowChoiceAsync(string text, MessageBoxIcon icon, params string[] buttons)
         {
             var image = icon == MessageBoxIcon.Warning ? System.Windows.MessageBoxImage.Warning : System.Windows.MessageBoxImage.Information;
-            return UiDispatcher.Current.InvokeAsync(() => Greenshot.Base.Wpf.ThemedMessageBox.ShowChoice(null, "왕샷 업데이트", text, image, buttons, defaultIndex: 0, cancelIndex: -1, onTop: true));
+            return UiDispatcher.Current.InvokeAsync(() => Greenshot.Base.Wpf.ThemedMessageBox.ShowChoice(null, "왕캡 업데이트", text, image, buttons, defaultIndex: 0, cancelIndex: -1, onTop: true));
         }
 
         private static Task ShowMessageAsync(string text, MessageBoxIcon icon) => ShowChoiceAsync(text, icon, "확인");
@@ -435,7 +435,7 @@ namespace Greenshot.Helpers
 
             bool canInstall = _setupUrl != null && IsInstalledCopy();
             string question = canInstall ? "지금 업데이트할까요?" : "다운로드 페이지를 열까요?";
-            int answer = await ShowChoiceAsync($"왕샷 {newVersion} 버전이 나왔어요. (현재 {CurrentVersion})\n\n{notes}\n\n{question}", MessageBoxIcon.Information, "예", "나중에").ConfigureAwait(false);
+            int answer = await ShowChoiceAsync($"왕캡 {newVersion} 버전이 나왔어요. (현재 {CurrentVersion})\n\n{notes}\n\n{question}", MessageBoxIcon.Information, "예", "나중에").ConfigureAwait(false);
             Log.InfoFormat("The answer to the update question: {0}", answer);
             if (answer != 0)
             {

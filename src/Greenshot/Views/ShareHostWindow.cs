@@ -239,7 +239,7 @@ namespace Greenshot.Views
 
                 var dataPackage = request.Data;
                 dataPackage.Properties.Title = _title ?? "Share a screenshot";
-                dataPackage.Properties.ApplicationName = "왕샷";
+                dataPackage.Properties.ApplicationName = "왕캡";
                 dataPackage.Properties.Thumbnail = imageRandomAccessStreamReference;
                 dataPackage.Properties.LogoBackgroundColor = Color.FromArgb(0xff, 0x3d, 0x3d, 0x3d);
 

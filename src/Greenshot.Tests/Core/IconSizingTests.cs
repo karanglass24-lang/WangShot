@@ -29,10 +29,10 @@ namespace Greenshot.Tests.Core
     public class IconSizingTests
     {
         [Theory]
-        [InlineData(28, 25)]
-        [InlineData(20, 18)]
-        [InlineData(16, 14)]
-        public void DisplaySize_ReducesIconsByTenPercent(int original, int expected)
+        [InlineData(28, 26)]
+        [InlineData(20, 19)]
+        [InlineData(16, 15)]
+        public void DisplaySize_EnlargesThePreviousCompactSize(int original, int expected)
         {
             Assert.Equal(expected, IconSizing.DisplaySize(original));
         }

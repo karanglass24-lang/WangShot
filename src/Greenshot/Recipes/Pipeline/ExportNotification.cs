@@ -229,7 +229,7 @@ namespace Greenshot.Recipes.Pipeline
             return new Notification(string.IsNullOrEmpty(flowError) ? GetKind(shown) : NotificationKind.Error,
                 string.Join(Environment.NewLine, lines.Select(l => l.Text)), TimeSpan.FromHours(1),
                 opens == null ? (Action)null : () => Open(opens), captureId, thumbnailPath,
-                string.IsNullOrWhiteSpace(title) ? "왕샷" : title, lines, buttons);
+                string.IsNullOrWhiteSpace(title) ? "왕캡" : title, lines, buttons);
         }
 
         private static void Open(ExportResult result)

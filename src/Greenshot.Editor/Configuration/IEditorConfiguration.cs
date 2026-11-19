@@ -156,7 +156,7 @@ namespace Greenshot.Editor.Configuration
         string RecentEmoji { get; set; }
 
         [DefaultValue(false)]
-        [Description("왕샷: show the panel with the recent captures left of the canvas")]
+        [Description("왕캡: show the panel with the recent captures left of the canvas")]
         bool RecentCapturesPanelShown { get; set; }
 
         [IniValue(ListDelimiter = '|')]

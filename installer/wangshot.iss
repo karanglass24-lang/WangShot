@@ -1,8 +1,8 @@
-﻿; 왕샷 설치 프로그램 (Inno Setup 6)
+﻿; 왕캡 설치 프로그램 (Inno Setup 6)
 ;   ISCC.exe installer\wangshot.iss
 ; 먼저 빌드: dotnet build src\Greenshot\Greenshot.csproj -c Release
-#define AppName "왕샷"
-#define AppVersion "1.5.4"
+#define AppName "왕캡"
+#define AppVersion "1.5.5"
 #define AppExe "WangShot.exe"
 #define BuildDir "..\src\Greenshot\bin\Release\net480"
 
@@ -41,7 +41,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
-Name: "startup"; Description: "Windows 시작할 때 왕샷 자동 실행"; GroupDescription: "시작 옵션:"
+Name: "startup"; Description: "Windows 시작할 때 왕캡 자동 실행"; GroupDescription: "시작 옵션:"
 
 [Files]
 Source: "{#BuildDir}\*"; DestDir: "{app}"; Excludes: "*.pdb"; Flags: ignoreversion recursesubdirs createallsubdirs

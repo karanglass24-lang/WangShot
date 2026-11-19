@@ -36,7 +36,7 @@ namespace Greenshot.Base.Wpf
         /// </summary>
         public static void ApplyDialogLook(Window window, string title)
         {
-            window.Title = title ?? "왕샷";
+            window.Title = title ?? "왕캡";
             window.WindowStyle = WindowStyle.None;
             window.ResizeMode = ResizeMode.NoResize;
             window.SizeToContent = SizeToContent.WidthAndHeight;
@@ -55,7 +55,7 @@ namespace Greenshot.Base.Wpf
         {
             var header = new TextBlock
             {
-                Text = text ?? "왕샷",
+                Text = text ?? "왕캡",
                 FontWeight = FontWeights.SemiBold,
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = WpfThemeHelper.TextPrimary,

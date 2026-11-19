@@ -7,9 +7,9 @@ namespace Greenshot.Helpers
     /// </summary>
     public static class WangShotInfo
     {
-        public const string Name = "왕샷";
+        public const string Name = "왕캡";
 
-        public const string Version = "1.5.4";
+        public const string Version = "1.5.5";
 
         public static Version CurrentVersion => System.Version.Parse(Version);
 

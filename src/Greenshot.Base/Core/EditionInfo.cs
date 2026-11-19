@@ -54,7 +54,7 @@ namespace Greenshot.Base.Core
         /// <summary>
         /// The product name with the edition, e.g. "Greenshot" or "Greenshot Light"
         /// </summary>
-        public static string ProductName => IsFull ? "왕샷" : $"왕샷 {Name}";
+        public static string ProductName => IsFull ? "왕캡" : $"왕캡 {Name}";
 
         /// <summary>
         /// The edition for the version text in logs and reports: empty for the full edition, otherwise e.g. " Light"

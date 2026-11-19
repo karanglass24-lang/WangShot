@@ -247,7 +247,7 @@ namespace Greenshot.Shell
             var now = DateTime.Now;
             bool showPresent = (now.Month == 12 && now.Day > 19 && now.Day < 27) || // christmas
                                (now.Month == 3 && now.Day > 13 && now.Day < 21); // birthday
-            AddItem(menu, "왕샷", null, () => _shell.ShowAbout());
+            AddItem(menu, "왕캡", null, () => _shell.ShowAbout());
             menu.Items.Add(ThemedMenu.CreateSeparator());
 
             AddItem(menu, Texts.Core.ContextmenuExit, "contextmenu_exit.Image", () => _shell.Exit());
