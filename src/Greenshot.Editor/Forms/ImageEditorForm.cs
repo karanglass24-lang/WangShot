@@ -2677,6 +2677,26 @@ namespace Greenshot.Editor.Forms
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keys)
         {
+            if (keys == Keys.F11)
+            {
+                ToggleFullscreen();
+                return true;
+            }
+            if (keys == (Keys.Control | Keys.Shift | Keys.T))
+            {
+                CopyOcrText();
+                return true;
+            }
+            if (keys == (Keys.Control | Keys.Shift | Keys.G))
+            {
+                UngroupSelected();
+                return true;
+            }
+            if (keys == (Keys.Control | Keys.Alt | Keys.G))
+            {
+                GroupSelected();
+                return true;
+            }
             // Escape cancels the drag of a tab
             if (keys == Keys.Escape && tabStrip.CancelDrag())
             {

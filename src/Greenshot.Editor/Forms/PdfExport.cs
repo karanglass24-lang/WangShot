@@ -10,7 +10,7 @@ using System.Text;
 namespace Greenshot.Editor.Forms
 {
     /// <summary>
-    /// 왕샷: saves an image as a PDF with one page which has the size of the image (96 dpi), the picture inside is a JPEG
+    /// Saves an image as a lossless RGB PDF page using its resolution.
     /// </summary>
     internal static class PdfExport
     {
@@ -18,7 +18,7 @@ namespace Greenshot.Editor.Forms
         {
             int width = image.Width;
             int height = image.Height;
-            byte[] jpeg;
+            byte[] rgb = new byte[checked(width * height * 3)];
             using (var flat = new Bitmap(width, height, PixelFormat.Format24bppRgb))
             {
                 using (var graphics = Graphics.FromImage(flat))
@@ -28,18 +28,29 @@ namespace Greenshot.Editor.Forms
                     graphics.DrawImage(image, 0, 0, width, height);
                 }
 
-                var codec = ImageCodecInfo.GetImageEncoders().First(c => c.FormatID == ImageFormat.Jpeg.Guid);
-                using var parameters = new EncoderParameters(1);
-                parameters.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, jpegQuality);
-                using var stream = new MemoryStream();
-                flat.Save(stream, codec, parameters);
-                jpeg = stream.ToArray();
+                var bits = flat.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+                try
+                {
+                    var row = new byte[Math.Abs(bits.Stride)];
+                    for (int y = 0; y < height; y++)
+                    {
+                        System.Runtime.InteropServices.Marshal.Copy(IntPtr.Add(bits.Scan0, y * bits.Stride), row, 0, row.Length);
+                        for (int x = 0; x < width; x++)
+                        {
+                            int source = x * 3, dest = (y * width + x) * 3;
+                            rgb[dest] = row[source + 2];
+                            rgb[dest + 1] = row[source + 1];
+                            rgb[dest + 2] = row[source];
+                        }
+                    }
+                }
+                finally { flat.UnlockBits(bits); }
             }
 
-            // 96 dpi: one pixel is 0.75 point. A page is at most 14400 points
-            double scale = 0.75;
-            double pageWidth = width * scale;
-            double pageHeight = height * scale;
+            double dpiX = image.HorizontalResolution > 0 ? image.HorizontalResolution : 96;
+            double dpiY = image.VerticalResolution > 0 ? image.VerticalResolution : 96;
+            double pageWidth = width * 72 / dpiX;
+            double pageHeight = height * 72 / dpiY;
             double limit = Math.Max(pageWidth, pageHeight);
             if (limit > 14400)
             {
@@ -70,8 +81,8 @@ namespace Greenshot.Editor.Forms
             offsets[4] = output.Position;
             Write($"4 0 obj\n<< /Length {content.Length} >>\nstream\n{content}endstream\nendobj\n");
             offsets[5] = output.Position;
-            Write($"5 0 obj\n<< /Type /XObject /Subtype /Image /Width {width} /Height {height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length {jpeg.Length} >>\nstream\n");
-            output.Write(jpeg, 0, jpeg.Length);
+            Write($"5 0 obj\n<< /Type /XObject /Subtype /Image /Width {width} /Height {height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Length {rgb.Length} >>\nstream\n");
+            output.Write(rgb, 0, rgb.Length);
             Write("\nendstream\nendobj\n");
             long xref = output.Position;
             Write("xref\n0 6\n0000000000 65535 f \n");

@@ -248,7 +248,8 @@ namespace Greenshot.Capturing
                     stitcher.Start(first);
                 }
 
-                int notches = 5;
+                // Start conservatively: a large first jump can lose the overlap needed to stitch.
+                int notches = 1;
                 while (stitcher.FrameCount < MaximumFrames && stitcher.TotalHeight < MaximumHeight)
                 {
                     if ((GetAsyncKeyState(0x1B) & 0x8000) != 0)

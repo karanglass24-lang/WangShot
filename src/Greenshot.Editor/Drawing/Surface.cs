@@ -3675,10 +3675,21 @@ namespace Greenshot.Editor.Drawing
                 _mouseDownElement.Invalidate();
                 selectedElements.Invalidate();
 
-                // 왕샷: 스마트 이동 중이면 원본 영역에 인페인팅된 배경을 렌더링
-                if (_smartMoveActive && _smartMoveBackground != null)
+                // Snapshot both the original pixels and positions before changing either.
+                if (_smartMoveActive && _smartMoveBackground != null &&
+                    !_isSurfaceMoveMadeUndoable && (currentMouse.X != _mouseStart.X || currentMouse.Y != _mouseStart.Y))
                 {
-                    RenderSmartMoveBackground();
+                    var containers = new DrawableContainerList();
+                    containers.AddRange(selectedElements.Where(c => c.IsUndoable));
+                    var area = Rectangle.Intersect(
+                        new Rectangle(_smartMoveOriginalBounds.X, _smartMoveOriginalBounds.Y, _smartMoveOriginalBounds.Width, _smartMoveOriginalBounds.Height),
+                        new Rectangle(Point.Empty, Image.Size));
+                    if (containers.Count > 0 && !area.IsEmpty)
+                    {
+                        MakeUndoable(new SmartMoveMemento(this, area, new DrawableContainerBoundsChangeMemento(containers)), false);
+                        _isSurfaceMoveMadeUndoable = true;
+                        RenderSmartMoveBackground();
+                    }
                 }
 
                 // 왕샷: Alt+drag copies the selection, but a click without a drag must not leave a copy behind
@@ -3977,6 +3988,16 @@ namespace Greenshot.Editor.Drawing
 
             // No clipping for the adorners
             targetGraphics.ResetClip();
+            if (ShowGrid)
+            {
+                float step = 20 * (float)_zoomFactor;
+                if (step >= 4)
+                {
+                    using var gridPen = new Pen(Color.FromArgb(90, Color.Gray));
+                    for (float x = 0; x < Width; x += step) targetGraphics.DrawLine(gridPen, x, 0, x, Height);
+                    for (float y = 0; y < Height; y += step) targetGraphics.DrawLine(gridPen, 0, y, Width, y);
+                }
+            }
             // Draw adorners last
             foreach (var drawableContainer in selectedElements)
             {
@@ -4477,7 +4498,23 @@ namespace Greenshot.Editor.Drawing
         {
             if (!HasSelectedElements) return;
             var element = selectedElements.FirstOrDefault() as DrawableContainer;
-            element?.ShowResizeDialog();
+            if (element == null) return;
+            using var dialog = new Form { Text = "개체 크기 지정", FormBorderStyle = FormBorderStyle.FixedDialog, StartPosition = FormStartPosition.CenterParent, ClientSize = new Size(250, 130), MaximizeBox = false, MinimizeBox = false };
+            var width = new NumericUpDown { Left = 105, Top = 12, Width = 120, Minimum = 1, Maximum = 100000, Value = Math.Max(1, element.Width) };
+            var height = new NumericUpDown { Left = 105, Top = 42, Width = 120, Minimum = 1, Maximum = 100000, Value = Math.Max(1, element.Height) };
+            var ok = new Button { Text = "확인", Left = 65, Top = 83, DialogResult = DialogResult.OK };
+            var cancel = new Button { Text = "취소", Left = 150, Top = 83, DialogResult = DialogResult.Cancel };
+            dialog.Controls.AddRange(new Control[] { new Label { Text = "너비 (px)", Left = 12, Top = 14 }, new Label { Text = "높이 (px)", Left = 12, Top = 44 }, width, height, ok, cancel });
+            dialog.AcceptButton = ok;
+            dialog.CancelButton = cancel;
+            if (dialog.ShowDialog(FindForm()) == DialogResult.OK)
+            {
+                element.MakeBoundsChangeUndoable(false);
+                element.Width = (int)width.Value;
+                element.Height = (int)height.Value;
+                Modified = true;
+                Invalidate();
+            }
         }
 
         /// <summary>

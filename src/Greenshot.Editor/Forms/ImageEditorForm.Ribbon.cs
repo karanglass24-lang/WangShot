@@ -88,11 +88,14 @@ namespace Greenshot.Editor.Forms
                 (NewAction("열기", "이미지 파일 열기 (Ctrl+O)", "openFile.Image", (s, e) => OpenImageFile()), null),
                 (btnSave, "저장 (Ctrl+S)"),
                 (saveAs, null));
-            AddRibbonGroup(file, "창", (Proxy(closeToolStripMenuItem, "닫기 (Ctrl+W)"), null));
+            AddRibbonGroup(file, "캡처",
+                (NewAction("스크롤 캡처", "스크롤 캡처", "scrollCapture.Image", (s, e) => SimpleServiceProvider.Current.GetInstance<IGreenshotShell>().StartScrollCapture()), null));
+            AddRibbonGroup(file, "창", (Proxy(closeToolStripMenuItem, "창 닫기"), null));
 
             // 왕샷: 파일 탭 그룹 KeyTips
             _ribbon.SetGroupKeyTip(file, 0, "F"); // 파일
-            _ribbon.SetGroupKeyTip(file, 1, "W"); // 창
+            _ribbon.SetGroupKeyTip(file, 1, "C"); // 캡처
+            _ribbon.SetGroupKeyTip(file, 2, "W"); // 창
 
             // ============================================================
             // 편집 탭 (주 작업) - 그리기 도구 / 강조 도구 / 이미지 / 색상·속성
@@ -116,15 +119,23 @@ namespace Greenshot.Editor.Forms
             var lineTool = new ToolStripDropButton();
             lineTool.SetMembers((btnLine, "선 (L)"), (btnArrow, "화살표 (A)"));
             var penTool = new ToolStripDropButton();
-            penTool.SetMembers((btnFreehand, "연필 (P)"), (btnHighlight, "형광펜 (H)"));
+            penTool.SetMembers((btnFreehand, "연필 (F)"), (btnHighlight, "형광펜 (H)"));
 
             // 왕샷: 강조 도구 (교재 작성 핵심)
             CreateEmphasisTools();
+            var editText = new ToolStripDropButton();
+            editText.MirrorOf(btnText);
+            IconBinder.BindLike(editText, btnText);
+            var editSpeech = new ToolStripDropButton();
+            editSpeech.MirrorOf(btnSpeechBubble);
+            IconBinder.BindLike(editSpeech, btnSpeechBubble);
+            var editEmphasis = new ToolStripDropButton();
+            editEmphasis.SetMembers((_spotlightTool, "스포트라이트"), (_magnifyTool, "돋보기"), (_clickMarkTool, "클릭 표시"));
 
             // ---- 그리기 도구 그룹 ----
             var drawTools = AddRibbonGroup(edit, "그리기 도구",
                 (selectTool, "선택 (V)"), (shapeTool, "도형"), (lineTool, "선/화살표"), (penTool, "연필/형광펜"),
-                (btnText, "글자 (T)"), (btnSpeechBubble, "말풍선 (B)"));
+                (editText, "글자"), (editSpeech, "말풍선"));
             foreach (ToolStripItem tool in drawTools.Items)
             {
                 tool.Padding = new Padding(2, 2, 2, 28);
@@ -132,7 +143,7 @@ namespace Greenshot.Editor.Forms
 
             // ---- 강조 도구 그룹 (신규, 분리) ----
             var emphasisGroup = AddRibbonGroup(edit, "강조 도구",
-                (_emphasisTool, "강조 (S)"));
+                (editEmphasis, "강조"));
             foreach (ToolStripItem tool in emphasisGroup.Items)
             {
                 tool.Padding = new Padding(2, 2, 2, 28);
@@ -147,7 +158,9 @@ namespace Greenshot.Editor.Forms
             var cropTool = new ToolStripDropButton();
             cropTool.SetMembers((btnCropEdge, "테두리 자르기 (K)"), (btnCrop, "선택 자르기 (C)"));
             var imageGroup = AddRibbonGroup(edit, "이미지",
-                (cropTool, "자르기"), (btnResize, "크기 (Ctrl+R)"), (rotateCwToolstripButton, "우회전 (Ctrl+Shift+Right)"), (rotateCcwToolstripButton, "좌회전 (Ctrl+Shift+Left)"), (effectsTool, "효과 (F)"));
+                (cropTool, "자르기"), (btnResize, "이미지 크기"), (rotateCwToolstripButton, "우회전"), (rotateCcwToolstripButton, "좌회전"),
+                (NewAction("여백 추가", "캔버스의 각 방향에 여백 추가", "CropHorizontal.Image", (s, e) => SetCanvasMargin()), null),
+                (effectsTool, "효과"));
             foreach (ToolStripItem item in imageGroup.Items)
             {
                 item.Padding = new Padding(2, 2, 2, 28);
@@ -206,7 +219,7 @@ namespace Greenshot.Editor.Forms
                 (highlightPresetTool, "강조 설정"), (_emphasisTool, "강조 도구"));
 
             // 가리기 그룹
-            var obfuscateTool = new ToolStripDropButton { ToolTipText = "가리기 (Q) - 픽셀화/블러/단색/텍스트 가리기", DropDown = obfuscateModeButton.DropDown };
+            var obfuscateTool = new ToolStripDropButton { ToolTipText = "가리기 (O) - 픽셀화/블러/단색/텍스트 가리기", DropDown = obfuscateModeButton.DropDown };
             IconBinder.Bind(obfuscateTool, IconSource.FromResource(typeof(ImageEditorForm), "obfuscateModeButton.Image"));
             AddRibbonGroup(annotation, "가리기",
                 (obfuscateTool, "가리기"));
@@ -215,32 +228,16 @@ namespace Greenshot.Editor.Forms
             AddRibbonGroup(annotation, "스탬프",
                 (btnStepLabel, "번호"), (emojiTool, "이모지"));
 
-            // 정렬·스타일 그룹
-            var alignTool = new ToolStripDropButton();
-            alignTool.SetMembers(
-                (ProxyIcon(upToTopToolStripMenuItem, "맨 앞으로", "arrangeFront.Image"), null),
-                (ProxyIcon(upOneLevelToolStripMenuItem, "앞으로", "arrangeForward.Image"), null),
-                (ProxyIcon(downOneLevelToolStripMenuItem, "뒤로", "arrangeBackward.Image"), null),
-                (ProxyIcon(downToBottomToolStripMenuItem, "맨 뒤로", "arrangeBack.Image"), null)
-            );
-            IconBinder.Bind(alignTool, IconSource.FromResource(typeof(ImageEditorForm), "alignBoss.Image"));
-            var quickStyleTool = new ToolStripDropButton { ToolTipText = "퀵 스타일 - 저장된 서식 조합 적용" };
-            // 퀵 스타일 메뉴는 나중에 구현
-            var formatPainter = NewAction("서식 복사", "서식 복사 (Ctrl+Shift+C) - 선택한 개체의 색/선/글꼴을 다른 개체에 적용", "formatPainter.Image", (s, e) => CopyFormat());
-            AddRibbonGroup(annotation, "정렬 · 스타일",
-                (alignTool, "정렬"), (quickStyleTool, "퀵 스타일"), (formatPainter, null));
-
             // 왕샷: 주석 탭 그룹 KeyTips
             _ribbon.SetGroupKeyTip(annotation, 0, "T"); // 텍스트
             _ribbon.SetGroupKeyTip(annotation, 1, "H"); // 강조
             _ribbon.SetGroupKeyTip(annotation, 2, "Q"); // 가리기
             _ribbon.SetGroupKeyTip(annotation, 3, "S"); // 스탬프
-            _ribbon.SetGroupKeyTip(annotation, 4, "A"); // 정렬·스타일
 
             // ============================================================
             // 개체 탭 (전문 편집) - 순서 / 변형 / 파일
             // ============================================================
-            AddRibbonGroup(obj, "순서",
+            AddRibbonGroup(obj, "쌓기 순서",
                 (ProxyIcon(upToTopToolStripMenuItem, "맨 앞으로", "arrangeFront.Image"), null),
                 (ProxyIcon(upOneLevelToolStripMenuItem, "앞으로", "arrangeForward.Image"), null),
                 (ProxyIcon(downOneLevelToolStripMenuItem, "뒤로", "arrangeBackward.Image"), null),
@@ -248,17 +245,21 @@ namespace Greenshot.Editor.Forms
 
             var flipTool = new ToolStripDropButton();
             flipTool.SetMembers(
-                (NewAction("수평 뒤집기", "수평 뒤집기 (Ctrl+H)", "flipHorizontal.Image", (s, e) => FlipSelected(true)), null),
-                (NewAction("수직 뒤집기", "수직 뒤집기 (Ctrl+Shift+H)", "flipVertical.Image", (s, e) => FlipSelected(false)), null)
+                (NewAction("수평 뒤집기", "선택한 개체 수평 뒤집기", "flipHorizontal.Image", (s, e) => FlipSelected(true)), null),
+                (NewAction("수직 뒤집기", "선택한 개체 수직 뒤집기", "flipVertical.Image", (s, e) => FlipSelected(false)), null)
             );
             var transformTool = new ToolStripDropButton();
             transformTool.SetMembers(
-                (NewAction("자유 변형", "자유 변형 (Ctrl+T) - 크기/회전/기울이기", "freeTransform.Image", (s, e) => FreeTransformSelected()), null),
-                (NewAction("크기 지정", "정확한 크기 지정 (Ctrl+Shift+R)", "btnResize.Image", (s, e) => ShowResizeDialog()), null)
+                (NewAction("자유 변형", "선택한 개체 변형", "freeTransform.Image", (s, e) => FreeTransformSelected()), null),
+                (NewAction("크기 지정", "정확한 크기 지정", "freeTransform.Image", (s, e) => ShowResizeDialog()), null)
             );
             AddRibbonGroup(obj, "변형",
-                (rotateCwToolstripButton, "우회전"), (rotateCcwToolstripButton, "좌회전"),
                 (flipTool, "뒤집기"), (transformTool, "변형"));
+
+            AddRibbonGroup(obj, "복사 · 서식",
+                (NewAction("개체 복사", "선택한 개체를 편집기에 붙여넣을 수 있도록 복사 (Ctrl+Shift+C)", "copyToolStripMenuItem.Image", (s, e) => CopySelectedObjectsToClipboard()), null),
+                (NewAction("서식 복사", "선택한 개체의 서식 저장", "btnCopy.Image", (s, e) => CopyFormat()), null),
+                (NewAction("서식 적용", "복사한 서식을 선택한 개체에 적용", "btnPaste.Image", (s, e) => _surface?.PasteFormat()), null));
 
             AddRibbonGroup(obj, "개체 파일",
                 (ProxyIcon(saveElementsToolStripMenuItem, "개체 저장", "btnSave.Image"), null),
@@ -267,36 +268,33 @@ namespace Greenshot.Editor.Forms
             // 왕샷: 개체 탭 그룹 KeyTips
             _ribbon.SetGroupKeyTip(obj, 0, "O"); // 순서
             _ribbon.SetGroupKeyTip(obj, 1, "T"); // 변형
-            _ribbon.SetGroupKeyTip(obj, 2, "F"); // 개체 파일
+            _ribbon.SetGroupKeyTip(obj, 2, "C"); // 복사 · 서식
+            _ribbon.SetGroupKeyTip(obj, 3, "F"); // 개체 파일
 
             // ============================================================
             // 보기 탭 - 확대/축소 / 표시 / 레이아웃
             // ============================================================
             var zoomIn = NewZoomButton("zoomInMenuItem.Image", "확대 (Ctrl++)", (s, e) => ZoomInMenuItemClick(s, e));
             var zoomOut = NewZoomButton("zoomOutMenuItem.Image", "축소 (Ctrl+-)", (s, e) => ZoomOutMenuItemClick(s, e));
-            var zoomActual = NewZoomButton("zoomActualSizeMenuItem.Image", "100% (Ctrl+1)", (s, e) => ZoomSetValueMenuItemClick(zoomActualSizeMenuItem, e));
-            var zoomFit = NewZoomButton("zoomBestFitMenuItem.Image", "맞춤 (Ctrl+0)", (s, e) => ZoomBestFitMenuItemClick(s, e));
+            var zoomActual = NewZoomButton("zoomActualSizeMenuItem.Image", "100% (Ctrl+0)", (s, e) => ZoomSetValueMenuItemClick(zoomActualSizeMenuItem, e));
+            var zoomFit = NewZoomButton("zoomBestFitMenuItem.Image", "맞춤 (Ctrl+9)", (s, e) => ZoomBestFitMenuItemClick(s, e));
             AddRibbonGroup(view, "확대/축소", (zoomIn, null), (zoomOut, null), (zoomActual, null), (zoomFit, null));
 
-            var rulerButton = NewAction("눈금자", "가로·세로 눈금자 보이기/숨기기 (Ctrl+R)", "ruler.Image", (s, e) => SetRulersShown(((ToolStripButton)s).Checked));
+            var rulerButton = NewAction("눈금자", "가로·세로 눈금자 보이기/숨기기", "ruler.Image", (s, e) => SetRulersShown(((ToolStripButton)s).Checked));
             rulerButton.CheckOnClick = true;
             rulerButton.Checked = true;
 
-            _recentCapturesButton = NewAction("최근 캡처", "왼쪽 사이드바에 최근 캡처 표시/숨기기 (Ctrl+Shift+R)", "recentCaptures.Image", (s, e) => SetRecentCapturesPanelShown(((ToolStripButton)s).Checked));
+            _recentCapturesButton = NewAction("최근 캡처", "왼쪽 사이드바에 최근 캡처 표시/숨기기", "recentCaptures.Image", (s, e) => SetRecentCapturesPanelShown(((ToolStripButton)s).Checked));
             _recentCapturesButton.CheckOnClick = true;
 
-            var gridButton = NewAction("그리드", "그리드 표시/숨기기 (Ctrl+G)", "grid.Image", (s, e) => ToggleGrid());
+            var gridButton = NewAction("그리드", "그리드 표시/숨기기", "grid.Image", (s, e) => ToggleGrid());
             gridButton.CheckOnClick = true;
 
             var fullscreenButton = NewAction("전체 화면", "전체 화면 모드 (F11)", "fullscreen.Image", (s, e) => ToggleFullscreen());
             AddRibbonGroup(view, "표시", (rulerButton, null), (_recentCapturesButton, null), (gridButton, null), (fullscreenButton, null));
 
-            var layoutTool = new ToolStripDropButton();
-            layoutTool.SetMembers(
-                (NewAction("캔버스 중앙", "이미지를 캔버스 중앙에 정렬", "centerCanvas.Image", (s, e) => CenterCanvas()), null),
-                (NewAction("여백 설정", "캔버스 여백 설정", "margin.Image", (s, e) => SetCanvasMargin()), null)
-            );
-            AddRibbonGroup(view, "레이아웃", (layoutTool, "캔버스"));
+            AddRibbonGroup(view, "화면 위치",
+                (NewAction("화면 중앙 보기", "이미지의 가운데로 화면 이동", "zoomBestFitMenuItem.Image", (s, e) => CenterCanvas()), null));
 
             // 왕샷: 보기 탭 그룹 KeyTips
             _ribbon.SetGroupKeyTip(view, 0, "Z"); // 확대/축소
@@ -307,21 +305,17 @@ namespace Greenshot.Editor.Forms
             // 내보내기 탭 - 복사 / 저장 / 보내기 / 자동화
             // ============================================================
             AddRibbonGroup(export, "클립보드",
-                (btnClipboard, "이미지 복사 (Ctrl+C)"),
-                (NewAction("개체 복사", "선택한 개체만 복사 (Ctrl+Shift+C)", "copyObjects.Image", (s, e) => CopySelectedObjectsToClipboard()), null),
+                (btnClipboard, "전체 이미지 복사"),
                 (NewAction("텍스트 복사", "OCR로 텍스트 추출 복사 (Ctrl+Shift+T)", "copyText.Image", (s, e) => CopyOcrText()), null));
 
             AddRibbonGroup(export, "저장",
                 (NewAction("PDF로 저장", "이미지를 PDF 파일로 저장해요", "pdfFile.Image", (s, e) => SaveAsPdf()), null));
             _ribbonShareStrip = AddRibbonGroup(export, "보내기");
-            AddRibbonGroup(export, "자동화",
-                (NewAction("스크롤 캡처", "스크롤 캡처 (Ctrl+Alt+S) - 마우스 아래 창 자동 스크롤 캡처", "scrollCapture.Image", (s, e) => SimpleServiceProvider.Current.GetInstance<IGreenshotShell>().StartScrollCapture()), null));
 
             // 왕샷: 내보내기 탭 그룹 KeyTips
             _ribbon.SetGroupKeyTip(export, 0, "C"); // 클립보드
             _ribbon.SetGroupKeyTip(export, 1, "S"); // 저장
             _ribbon.SetGroupKeyTip(export, 2, "D"); // 보내기
-            _ribbon.SetGroupKeyTip(export, 3, "A"); // 자동화
 
             // 기본 탭: 편집 (주 작업)
             _ribbon.SelectTab(edit);
@@ -504,7 +498,7 @@ namespace Greenshot.Editor.Forms
                 ToolTipText = "가로 정렬",
                 DisplayStyle = ToolStripItemDisplayStyle.Image
             };
-            IconBinder.Bind(_formatTextHorizontalAlignmentButton, IconSource.FromResource(typeof(ImageEditorForm), "textAlignCenterButton.Image"));
+            IconBinder.Bind(_formatTextHorizontalAlignmentButton, IconSource.FromResource(typeof(ImageEditorForm), "btnAlignCenter.Image"));
             // 드롭다운 메뉴 구성
             _formatTextHorizontalAlignmentButton.DropDownItems.Add(
                 CreateAlignmentMenuItem("왼쪽", StringAlignment.Near, _formatTextHorizontalAlignmentButton));
@@ -519,7 +513,7 @@ namespace Greenshot.Editor.Forms
                 ToolTipText = "세로 정렬",
                 DisplayStyle = ToolStripItemDisplayStyle.Image
             };
-            IconBinder.Bind(_formatTextVerticalAlignmentButton, IconSource.FromResource(typeof(ImageEditorForm), "textAlignMiddleButton.Image"));
+            IconBinder.Bind(_formatTextVerticalAlignmentButton, IconSource.FromResource(typeof(ImageEditorForm), "btnAlignMiddle.Image"));
             _formatTextVerticalAlignmentButton.DropDownItems.Add(
                 CreateAlignmentMenuItem("위쪽", StringAlignment.Near, _formatTextVerticalAlignmentButton));
             _formatTextVerticalAlignmentButton.DropDownItems.Add(
@@ -544,11 +538,11 @@ namespace Greenshot.Editor.Forms
             var borderFillGroup = _ribbon.AddGroup(tabIndex, "테두리/채우기");
 
             _formatLineColorButton = new ToolStripColorButton { ToolTipText = "테두리 색" };
-            IconBinder.Bind(_formatLineColorButton, IconSource.FromResource(typeof(ImageEditorForm), "lineColorButton.Image"));
+            IconBinder.Bind(_formatLineColorButton, IconSource.FromResource(typeof(ImageEditorForm), "btnLineColor.Image"));
             borderFillGroup.Items.Add(_formatLineColorButton);
 
             _formatFillColorButton = new ToolStripColorButton { ToolTipText = "채우기 색" };
-            IconBinder.Bind(_formatFillColorButton, IconSource.FromResource(typeof(ImageEditorForm), "fillColorButton.Image"));
+            IconBinder.Bind(_formatFillColorButton, IconSource.FromResource(typeof(ImageEditorForm), "btnFillColor.Image"));
             borderFillGroup.Items.Add(_formatFillColorButton);
 
             _formatLineThicknessUpDown = new ToolStripNumericUpDown
@@ -1042,18 +1036,25 @@ namespace Greenshot.Editor.Forms
         /// <summary>
         /// 전체 화면 토글
         /// </summary>
+        private bool _fullscreen;
+        private FormWindowState _beforeFullscreenState;
+        private FormBorderStyle _beforeFullscreenBorder;
         private void ToggleFullscreen()
         {
-            if (WindowState == FormWindowState.Normal)
+            if (!_fullscreen)
             {
+                _beforeFullscreenState = WindowState;
+                _beforeFullscreenBorder = FormBorderStyle;
+                _fullscreen = true;
                 WindowState = FormWindowState.Maximized;
                 FormBorderStyle = FormBorderStyle.None;
                 topToolStripContainer.TopToolStripPanel.Visible = false;
             }
             else
             {
-                FormBorderStyle = FormBorderStyle.Sizable;
-                WindowState = FormWindowState.Normal;
+                _fullscreen = false;
+                FormBorderStyle = _beforeFullscreenBorder;
+                WindowState = _beforeFullscreenState;
                 topToolStripContainer.TopToolStripPanel.Visible = true;
             }
         }
@@ -1063,7 +1064,10 @@ namespace Greenshot.Editor.Forms
         /// </summary>
         private void CenterCanvas()
         {
-            _surface?.CenterCanvas();
+            if (_surface == null) return;
+            panel1.AutoScrollPosition = new Point(
+                Math.Max(0, (_surface.Width - panel1.ClientSize.Width) / 2),
+                Math.Max(0, (_surface.Height - panel1.ClientSize.Height) / 2));
         }
 
         /// <summary>
@@ -1071,15 +1075,52 @@ namespace Greenshot.Editor.Forms
         /// </summary>
         private void SetCanvasMargin()
         {
-            _surface?.ShowCanvasMarginDialog();
+            if (_surface == null) return;
+            using var dialog = new Form { Text = "캔버스 여백 추가", FormBorderStyle = FormBorderStyle.FixedDialog, StartPosition = FormStartPosition.CenterParent, ClientSize = new Size(270, 125), MaximizeBox = false, MinimizeBox = false };
+            var margin = new NumericUpDown { Left = 130, Top = 16, Width = 110, Minimum = 0, Maximum = 5000, Value = 25 };
+            var ok = new Button { Text = "확인", Left = 70, Top = 75, DialogResult = DialogResult.OK };
+            var cancel = new Button { Text = "취소", Left = 155, Top = 75, DialogResult = DialogResult.Cancel };
+            dialog.Controls.AddRange(new Control[] { new Label { Text = "각 방향 여백 (px)", Left = 12, Top = 18, Width = 120 }, margin, ok, cancel });
+            dialog.AcceptButton = ok;
+            dialog.CancelButton = cancel;
+            if (dialog.ShowDialog(this) == DialogResult.OK && margin.Value > 0)
+            {
+                int pixels = (int)margin.Value;
+                ApplyEffect(new Greenshot.Base.Effects.ResizeCanvasEffect(pixels, pixels, pixels, pixels));
+            }
         }
 
         /// <summary>
         /// OCR 텍스트 복사
         /// </summary>
-        private void CopyOcrText()
+        private void CopyOcrText() { _ = CopyOcrTextAsync(); }
+
+        private async System.Threading.Tasks.Task CopyOcrTextAsync()
         {
-            _surface?.CopyOcrText();
+            if (_surface == null) return;
+            try
+            {
+                var provider = SimpleServiceProvider.Current.GetInstance<Greenshot.Base.Interfaces.Ocr.IOcrProvider>(isOptional: true);
+                if (provider == null)
+                {
+                    MessageBox.Show(this, "사용 가능한 글자 인식 엔진이 없습니다.", "왕캡", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+                using var image = _surface.GetImageForExport();
+                var lines = await provider.DoOcrAsync(image);
+                var text = string.Join(Environment.NewLine, (lines ?? new System.Collections.Generic.List<Greenshot.Base.Interfaces.Plugin.IOcrLineFeature>()).Select(line => line.Text));
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    MessageBox.Show(this, "인식된 글자가 없습니다. Windows 글자 인식 언어 설정을 확인해 주세요.", "왕캡", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+                Clipboard.SetText(text);
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("Could not copy OCR text", ex);
+                MessageBox.Show(this, "글자를 인식하거나 복사하지 못했습니다.", "왕캡", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         /// <summary>

@@ -371,6 +371,7 @@ namespace Greenshot.Editor.Controls
                 if (!_tabs[i].Visible) continue;
                 string kt = _tabs[i].KeyTip ?? AutoAssignKeyTip(_tabs[i].Title);
                 _keyTipMap[kt] = ("Tab", i);
+                _usedKeyTips.Add(kt);
             }
 
             // 현재 선택된 탭의 그룹 KeyTip 할당
@@ -388,6 +389,11 @@ namespace Greenshot.Editor.Controls
                             if (rg.Panel == panel)
                             {
                                 string kt = rg.KeyTip ?? AutoAssignKeyTip(rg.Panel.Controls.OfType<Label>().FirstOrDefault()?.Text ?? $"G{groupIdx}");
+                                if (_keyTipMap.ContainsKey(kt))
+                                {
+                                    kt = AutoAssignKeyTip("123456789");
+                                }
+                                _usedKeyTips.Add(kt);
                                 _keyTipMap[kt] = ("Group", _ribbonGroups.IndexOf(rg));
                                 break;
                             }
@@ -998,7 +1004,8 @@ namespace Greenshot.Editor.Controls
                         {
                             if (rg.Panel == panel)
                             {
-                                keyTip = rg.KeyTip;
+                                int index = _ribbonGroups.IndexOf(rg);
+                                keyTip = _keyTipMap.FirstOrDefault(entry => entry.Value.Type == "Group" && entry.Value.Index == index).Key;
                                 break;
                             }
                         }

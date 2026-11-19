@@ -129,7 +129,7 @@ namespace Greenshot.Shell
                         currentProcessId = currentProcess.Id;
                     }
 
-                    foreach (Process greenshotProcess in Process.GetProcessesByName("greenshot"))
+                    foreach (Process greenshotProcess in Process.GetProcessesByName("WangShot"))
                     {
                         try
                         {
