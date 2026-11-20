@@ -110,14 +110,14 @@ jobs:
         "%ISCC%" /O"${{ github.workspace }}\artifacts-installer" installer\wangshot.iss
 
     - name: Upload Installer Artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
        name: artifacts-installer
        path: ${{ github.workspace }}/artifacts-installer
        if-no-files-found: error
 
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: artifacts-greenshot-build
         path: src/Greenshot/bin/Release/net480/**
@@ -202,7 +202,7 @@ jobs:
         shell: pwsh
       
       - name: Upload portable build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: artifacts-greenshot-portable
           path: WangShot-*.zip
