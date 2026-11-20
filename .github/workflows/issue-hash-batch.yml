@@ -13,7 +13,7 @@ jobs:
     permissions:
       issues: write
     steps:
-      - uses: actions/github-script@v7
+      - uses: actions/github-script@v9
         with:
           script: |
             const batchSize = parseInt(context.payload.inputs.batch_size) || 50;
