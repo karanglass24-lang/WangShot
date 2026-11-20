@@ -108,21 +108,43 @@ namespace Greenshot.Tests.Editor
             Assert.Single(Directory.GetFiles(_folder));
         }
 
-        [Fact]
-        public void TargetLocked_KeepsTheOldFile_AndTheTemporaryFileIsNamedInTheError()
+        [Theory]
+        [InlineData(FileShare.None)]
+        [InlineData(FileShare.Read)]
+        public void TargetLockedAgainstWriting_FailsAtOnce_NothingIsLeftOver_AndTheOriginalStays(FileShare share)
         {
             string target = Path.Combine(_folder, "out.pdf");
             File.WriteAllText(target, "old");
             IOException error;
-            using (new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.None))
+            using (new FileStream(target, FileMode.Open, FileAccess.Read, share))
             {
                 error = Assert.Throws<IOException>(() => SafeFileWriter.Write(target, temp => File.WriteAllText(temp, "new"), null));
             }
 
             Assert.Equal("old", File.ReadAllText(target));
-            string temporary = Directory.GetFiles(_folder).Single(file => file != target);
-            Assert.Equal("new", File.ReadAllText(temporary));
-            Assert.Contains(temporary, error.Message);
+            Assert.Equal(new[] { target }, Directory.GetFiles(_folder));
+            Assert.Contains("저장하지 못했어요", error.Message);
+            Assert.Contains("바뀌지 않았어요", error.Message);
+        }
+
+        [Fact]
+        public void ReadOnlyTarget_FailsAtOnce_NothingIsLeftOver()
+        {
+            string target = Path.Combine(_folder, "out.pdf");
+            File.WriteAllText(target, "old");
+            File.SetAttributes(target, FileAttributes.ReadOnly);
+            try
+            {
+                var error = Assert.Throws<IOException>(() => SafeFileWriter.Write(target, temp => File.WriteAllText(temp, "new"), null));
+
+                Assert.Contains("읽기 전용", error.Message);
+                Assert.Equal("old", File.ReadAllText(target));
+                Assert.Equal(new[] { target }, Directory.GetFiles(_folder));
+            }
+            finally
+            {
+                File.SetAttributes(target, FileAttributes.Normal);
+            }
         }
     }
 }

@@ -146,7 +146,8 @@ namespace Greenshot.Tests.Editor
             cyclic.Children.Add(cyclic);
             using var stream = new MemoryStream(Serialize(cyclic));
 
-            surface.LoadElementsFromStream(stream);
+            // The caller is told (an editor which opens the file without its annotations would save them away)
+            Assert.Throws<InvalidDataException>(() => surface.LoadElementsFromStream(stream));
 
             Assert.Empty(surface.Elements);
         }

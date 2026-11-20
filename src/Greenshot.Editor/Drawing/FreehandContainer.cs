@@ -106,6 +106,51 @@ namespace Greenshot.Editor.Drawing
             RecalculatePath();
         }
 
+        /// <summary>
+        /// 왕캡: mirror the line about an axis (axisSum = low + high edge of the mirrored range in the coordinates of the parent).
+        /// The width of a freehand element is the size of the image and does not describe the path, so the points are mirrored, not the size.
+        /// Left and Top are 0 afterwards.
+        /// </summary>
+        internal void MirrorInParent(bool horizontal, int axisSum)
+        {
+            Point[] points = capturePoints.Select(point =>
+            {
+                int x = point.X + Left;
+                int y = point.Y + Top;
+                return horizontal ? new Point(axisSum - x, y) : new Point(x, axisSum - y);
+            }).ToArray();
+            Left = 0;
+            Top = 0;
+            capturePoints.Clear();
+            capturePoints.AddRange(points);
+            RecalculatePath();
+        }
+
+        /// <summary>
+        /// 왕캡: mirror the line in its own box (a lone element: the default Flip moved it by the size of the image)
+        /// </summary>
+        public override void Flip(bool horizontal)
+        {
+            Invalidate();
+            var bounds = PathBounds;
+            MirrorInParent(horizontal, horizontal ? bounds.Left + bounds.Right : bounds.Top + bounds.Bottom);
+            Invalidate();
+        }
+
+        /// <summary>
+        /// 왕캡: the points and the position, for the undo of a flip
+        /// </summary>
+        internal (List<Point> Points, int Left, int Top) TakeState() => (new List<Point>(capturePoints), Left, Top);
+
+        internal void RestoreState((List<Point> Points, int Left, int Top) state)
+        {
+            Left = state.Left;
+            Top = state.Top;
+            capturePoints.Clear();
+            capturePoints.AddRange(state.Points);
+            RecalculatePath();
+        }
+
         protected override void OnDeserialized(StreamingContext context)
         {
             RecalculatePath();

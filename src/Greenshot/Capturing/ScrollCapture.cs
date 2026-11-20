@@ -212,6 +212,21 @@ namespace Greenshot.Capturing
             return true;
         }
 
+        private static bool _stopRequested;
+
+        /// <summary>
+        /// 왕캡: Esc is down now or was pressed since the last call (also a short press); the request is kept until the capture starts again
+        /// </summary>
+        private static bool CheckStop()
+        {
+            if ((GetAsyncKeyState(0x1B) & 0x8001) != 0)
+            {
+                _stopRequested = true;
+            }
+
+            return _stopRequested;
+        }
+
         /// <summary>
         /// The picture when the page stands still: two pictures in a row are the same
         /// </summary>
@@ -220,6 +235,12 @@ namespace Greenshot.Capturing
             Bitmap current = null;
             for (int attempt = 0; attempt < 16; attempt++)
             {
+                // A short press of Esc is seen in every round (the key state has a "pressed since the last call" bit)
+                if (CheckStop())
+                {
+                    break;
+                }
+
                 await Task.Delay(attempt == 0 ? firstWait : 160).ConfigureAwait(false);
                 var next = Grab(rect);
                 if (current != null && Same(current, next))
@@ -236,73 +257,58 @@ namespace Greenshot.Capturing
         }
 
         /// <summary>
-        /// 왕캡: the pictures are the same when only a small part of the sampled points differs (a caret, an animation, a header which appears)
-        /// </summary>
-        private static unsafe bool Similar(Bitmap a, Bitmap b, double maximumDifferentShare = 0.04)
-        {
-            var rect = new Rectangle(0, 0, a.Width, a.Height);
-            var dataA = a.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
-            var dataB = b.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
-            try
-            {
-                long samples = 0;
-                long different = 0;
-                for (int y = 0; y < a.Height; y += 3)
-                {
-                    byte* rowA = (byte*)dataA.Scan0 + y * dataA.Stride;
-                    byte* rowB = (byte*)dataB.Scan0 + y * dataB.Stride;
-                    for (int x = 0; x < a.Width; x += 5)
-                    {
-                        int i = x * 3;
-                        samples++;
-                        if (Math.Abs(rowA[i] - rowB[i]) + Math.Abs(rowA[i + 1] - rowB[i + 1]) + Math.Abs(rowA[i + 2] - rowB[i + 2]) > 12)
-                        {
-                            different++;
-                        }
-                    }
-                }
-
-                return samples > 0 && different <= samples * maximumDifferentShare;
-            }
-            finally
-            {
-                a.UnlockBits(dataA);
-                b.UnlockBits(dataB);
-            }
-        }
-
-        /// <summary>
-        /// 왕캡: scroll back by <paramref name="delta"/> and check that the view is the last accepted picture again (with a tolerance).
-        /// A page which had moved less than the step scrolls too far up: then it is scrolled down in small steps (at most 6) until the view fits.
-        /// Esc is checked in every round.
+        /// 왕캡: scroll back by <paramref name="delta"/> and check that the view is the last accepted picture again
+        /// (<see cref="ViewMatch.IsSameView(Bitmap, Bitmap)"/>). A page which had moved less than the step scrolls too far up: then it is scrolled
+        /// down in small steps (at most 6 views are compared) until the view fits. When it does not fit, the wheel goes back by exactly the
+        /// amount it was turned, so the view is where it was when the restore started. Esc is checked in every round.
         /// </summary>
         /// <returns>Restored: the view fits the last picture; Stopped: the user pressed Esc</returns>
         private static async Task<(bool Restored, bool Stopped)> RestoreViewAsync(Rectangle rect, Bitmap lastFrame, int delta)
         {
+            const int attempts = 6;
+            var wheel = new WheelTracker();
             mouse_event(0x0800 /* MOUSEEVENTF_WHEEL */, 0, 0, unchecked((uint)delta), UIntPtr.Zero);
-            for (int attempt = 0; attempt < 6; attempt++)
+            wheel.Up(delta);
+            for (int attempt = 0; attempt < attempts; attempt++)
             {
-                if ((GetAsyncKeyState(0x1B) & 0x8000) != 0)
+                if (CheckStop())
                 {
                     return (false, true);
                 }
 
                 using var view = await GrabSettledAsync(rect, attempt == 0 ? 500 : 350).ConfigureAwait(false);
-                if (view != null && view.Size == lastFrame.Size && Similar(lastFrame, view))
+                if (view != null && ViewMatch.IsSameView(lastFrame, view))
                 {
                     return (true, false);
                 }
 
-                mouse_event(0x0800, 0, 0, unchecked((uint)(-Math.Max(20, delta / 4))), UIntPtr.Zero);
+                if (attempt == attempts - 1)
+                {
+                    break;
+                }
+
+                int step = Math.Max(20, delta / 4);
+                mouse_event(0x0800, 0, 0, unchecked((uint)(-step)), UIntPtr.Zero);
+                wheel.Down(step);
             }
 
-            return (false, false);
+            // Back to where the restore started (the view which did not fit), the caller goes on with a smaller step from there
+            if (wheel.ReturnUnits != 0)
+            {
+                mouse_event(0x0800, 0, 0, unchecked((uint)wheel.ReturnUnits), UIntPtr.Zero);
+                await Task.Delay(300).ConfigureAwait(false);
+            }
+
+            return (false, CheckStop());
         }
 
         private static async Task<(Bitmap Result, int Frames, bool StoppedByUser)> CaptureAllAsync(Rectangle rect, POINT originalCursor)
         {
             var stitcher = new ScrollStitcher();
             bool stopped = false;
+            // A press of Esc before the capture started does not count
+            _stopRequested = false;
+            GetAsyncKeyState(0x1B);
             // 왕캡: the last picture which was put into the result: after a failed try the view has to be this one again
             Bitmap lastFrame = null;
             try
@@ -322,7 +328,7 @@ namespace Greenshot.Capturing
                 int shrinks = 0;
                 while (stitcher.FrameCount < MaximumFrames && stitcher.TotalHeight < MaximumHeight)
                 {
-                    if ((GetAsyncKeyState(0x1B) & 0x8000) != 0)
+                    if (CheckStop())
                     {
                         stopped = true;
                         break;
@@ -334,6 +340,11 @@ namespace Greenshot.Capturing
                     // A picture which doesn't fit (the page was still moving, a picture was loaded) gets another try before it is the end
                     for (int retry = 0; retry < 3 && !added && !atEnd; retry++)
                     {
+                        if (CheckStop())
+                        {
+                            break;
+                        }
+
                         using var current = await GrabSettledAsync(rect, retry == 0 ? 350 : 700).ConfigureAwait(false);
                         added = stitcher.TryAdd(current);
                         if (added)
@@ -345,6 +356,12 @@ namespace Greenshot.Capturing
                         {
                             atEnd = stitcher.LooksLikeLast(current);
                         }
+                    }
+
+                    if (!added && CheckStop())
+                    {
+                        stopped = true;
+                        break;
                     }
 
                     if (!added)

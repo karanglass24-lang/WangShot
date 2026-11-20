@@ -18,15 +18,17 @@ namespace Greenshot.Editor.Helpers
         // Words are joined with one space, so "010- 1234- 5678" and "010 -1234 -5678" are the same number as "010-1234-5678".
         private const string Separator = @"(?:\s?[-.]\s?|\s)";
         private const string OptionalSeparator = @"(?:\s?[-.]\s?|\s)?";
-        // Cards and resident numbers have no dot as separator
-        private const string CardSeparator = @"(?:\s?-\s?|\s)?";
+        // Resident numbers have no dot as separator
+        private const string CardSeparator = @"(?:\s?[-.]\s?|\s)?";
+        private const string ResidentSeparator = @"(?:\s?-\s?|\s)?";
 
-        // A number which follows another number with a dot or a dash ("192.168.010.123 4567") is part of that number
-        private const string NotAfterNumber = @"(?<!\d)(?<!\d[-.]\s?)";
+        // A number which follows another number directly with a dot ("192.168.010.123 4567", "1.5.010") is part of that number.
+        // "1. 010-1234-5678" (a list number) and "2026.11.20. 010-1234-5678" (a date) are not: the dot has a space after it.
+        private const string NotAfterNumber = @"(?<!\d)(?<!\d\.)";
         private const string NotBeforeNumber = @"(?!\d)(?![-.]\d)";
 
         // Area codes of Korea: Seoul, the provinces, internet phone and free of charge numbers
-        private const string AreaCode = @"(?:02|03[1-3]|04[1-4]|05[1-5]|06[1-4]|070|080)";
+        private const string AreaCode = @"(?:02|03[1-3]|04[1-4]|05[1-5]|06[1-4]|060|070|080|050\d?)";
 
         private static readonly TimeSpan MatchTimeout = TimeSpan.FromMilliseconds(500);
 
@@ -55,23 +57,24 @@ namespace Greenshot.Editor.Helpers
         private static readonly Pattern[] Patterns =
         {
             // Mobile phone: 010-1234-5678, 010 1234 5678, 01012345678, (010) 1234-5678
-            new Pattern(NotAfterNumber + @"\(?01[016789]\)?" + OptionalSeparator + @"\d{3,4}" + OptionalSeparator + @"\d{4}" + NotBeforeNumber, IsNotADate),
+            new Pattern(NotAfterNumber + @"\(?01[016789]\)?" + OptionalSeparator + @"\d{3,4}" + OptionalSeparator + @"\d{4}" + NotBeforeNumber),
             // Landline: 02-123-4567, 031-1234-5678 (a separator is needed, ten digits alone are an ordinary number)
-            new Pattern(NotAfterNumber + AreaCode + Separator + @"\d{3,4}" + Separator + @"\d{4}" + NotBeforeNumber, IsNotADate),
+            new Pattern(NotAfterNumber + AreaCode + Separator + @"\d{3,4}" + Separator + @"\d{4}" + NotBeforeNumber, IsNotASpacedDate),
             // Landline with the area code in brackets: (02) 123-4567, 02)123-4567
-            new Pattern(NotAfterNumber + @"\(?" + AreaCode + @"\)\s?\d{3,4}" + Separator + @"\d{4}" + NotBeforeNumber, IsNotADate),
+            new Pattern(NotAfterNumber + @"\(?" + AreaCode + @"\)\s?\d{3,4}" + Separator + @"\d{4}" + NotBeforeNumber),
             // International: +82 10-1234-5678, +82-10-1234-5678, +82 2-123-4567
             new Pattern(@"(?<![\d+])\+82" + OptionalSeparator + @"\(?0?(?:1[016789]|2|3[1-3]|4[1-4]|5[1-5]|6[1-4]|70)\)?" + OptionalSeparator + @"\d{3,4}" + OptionalSeparator + @"\d{4}(?!\d)"),
             // E-mail (slow on long text: only when there is an @, and with a time limit)
             new Pattern(@"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}", null, '@'),
             // Resident registration number: 900101-1234567 (the date has to exist; without a separator the check digit has to be right,
             // otherwise a bar code number of 13 digits would be one)
-            new Pattern(@"(?<!\d)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])" + CardSeparator + @"[1-8]\d{6}(?!\d)", IsResidentNumber),
-            // Card number: 4111-1111-1111-1111, 4111111111111111 (the check digit and the first digits of a card are checked, dates and
-            // other numbers are not cards)
+            new Pattern(@"(?<!\d)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])" + ResidentSeparator + @"[1-8]\d{6}(?!\d)", IsResidentNumber),
+            // Card number: 4111-1111-1111-1111, 4111.1111.1111.1111, 4111111111111111. With separators it is not checked (OCR errors a digit,
+            // a missed card is worse than one more box), only years and dates are not cards. Without separators 16 digits are a card
+            // when the check digit and the first digits fit.
             new Pattern(NotAfterNumber + @"\d{4}" + CardSeparator + @"\d{4}" + CardSeparator + @"\d{4}" + CardSeparator + @"\d{4}(?!\d)", IsCardNumber),
             // American Express: 3782 822463 10005
-            new Pattern(NotAfterNumber + @"3[47]\d{2}" + CardSeparator + @"\d{6}" + CardSeparator + @"\d{5}(?!\d)", IsCardNumber),
+            new Pattern(NotAfterNumber + @"3[47]\d{2}" + CardSeparator + @"\d{6}" + CardSeparator + @"\d{5}(?!\d)", IsAmexNumber),
         };
 
         private static string DigitsOf(string text) => new string(text.Where(char.IsDigit).ToArray());
@@ -110,6 +113,18 @@ namespace Greenshot.Editor.Helpers
         private static bool IsCardNumber(string text)
         {
             string digits = DigitsOf(text);
+            if (digits.Length != 16)
+            {
+                return false;
+            }
+
+            if (text.Length != digits.Length)
+            {
+                // With separators: not a card when two groups look like years ("2023 2024 2025 2026") 
+                int years = Enumerable.Range(0, 4).Count(i => int.Parse(digits.Substring(i * 4, 4), CultureInfo.InvariantCulture) is >= 1900 and <= 2099);
+                return years < 2;
+            }
+
             if (!IsLuhnValid(digits))
             {
                 return false;
@@ -121,8 +136,10 @@ namespace Greenshot.Editor.Helpers
                 return true;
             }
 
-            return int.TryParse(digits.Substring(0, 4), out int prefix) && prefix >= 2221 && prefix <= 2720;
+            return int.Parse(digits.Substring(0, 4), CultureInfo.InvariantCulture) is >= 2221 and <= 2720;
         }
+
+        private static bool IsAmexNumber(string text) => IsLuhnValid(DigitsOf(text));
 
         private static bool IsResidentNumber(string text)
         {
@@ -169,12 +186,18 @@ namespace Greenshot.Editor.Helpers
         }
 
         /// <summary>
-        /// "02 2024 1120" and "02 - 2024 - 1231" are dates (month, year, day), not phone numbers
+        /// "02 2024 1120" (month, year, day with spaces) is a date, not a phone number. Only for numbers with a two digit first group
+        /// and spaces only: "02-2072-0505" and "031-2019-1231" are phone numbers.
         /// </summary>
-        private static bool IsNotADate(string text)
+        private static bool IsNotASpacedDate(string text)
         {
+            if (text.Any(character => character != ' ' && !char.IsDigit(character)))
+            {
+                return true;
+            }
+
             var groups = Regex.Matches(text, @"\d+").Cast<Match>().Select(match => match.Value).ToList();
-            if (groups.Count != 3 || groups[1].Length != 4 || groups[2].Length != 4)
+            if (groups.Count != 3 || groups[0].Length != 2 || groups[1].Length != 4 || groups[2].Length != 4)
             {
                 return true;
             }

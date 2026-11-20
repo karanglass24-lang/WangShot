@@ -147,9 +147,9 @@ namespace Greenshot.Editor.Drawing
                 return false;
             }
 
-            int nodes = 0;
             foreach (var element in elements)
             {
+                int nodes = 0;
                 if (!IsValidNode(element, new HashSet<object>(ReferenceComparer.Instance), 0, ref nodes))
                 {
                     return false;
@@ -157,6 +157,19 @@ namespace Greenshot.Editor.Drawing
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// 왕캡: how deep groups are nested in the element: 0 for an element, 1 for a group of elements, 2 for a group with a group in it...
+        /// </summary>
+        internal static int NestingOf(IDrawableContainer element, int level = 0)
+        {
+            if (element is not GroupContainer group || level > MaximumDepth + 1)
+            {
+                return 0;
+            }
+
+            return 1 + group.Children.OfType<IDrawableContainer>().Select(child => NestingOf(child, level + 1)).DefaultIfEmpty(0).Max();
         }
 
         private static bool IsValidNode(object node, HashSet<object> path, int depth, ref int nodes)
@@ -483,7 +496,12 @@ namespace Greenshot.Editor.Drawing
                 // 왕캡: the children are mirrored in the box of the group (their places swap too), not each in its own box
                 foreach (var child in Children.OfType<DrawableContainer>())
                 {
-                    if (child is GroupContainer inner)
+                    if (child is FreehandContainer freehand)
+                    {
+                        // The width of a freehand line is the size of the image: its points are mirrored in the box of the group
+                        freehand.MirrorInParent(horizontal, horizontal ? Width : Height);
+                    }
+                    else if (child is GroupContainer inner)
                     {
                         // A group has no negative size: it moves to the mirrored place and mirrors its own children
                         if (horizontal)

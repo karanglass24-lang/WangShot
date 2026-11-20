@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using Greenshot.Base.Interfaces.Drawing;
 using Greenshot.Editor.Drawing;
@@ -6,27 +7,82 @@ using Greenshot.Editor.Drawing;
 namespace Greenshot.Editor.Memento
 {
     /// <summary>
-    /// 왕캡: undo of "뒤집기". A flip is its own inverse: the elements are flipped once more.
+    /// 왕캡: the places (and the points of freehand lines) of elements and of the elements in groups, for the undo of a flip.
+    /// A flip of a group or of a freehand line is not exactly its own inverse (rounding of the smoothed path), so the state is restored.
+    /// </summary>
+    internal sealed class PlaceSnapshot
+    {
+        private readonly List<(DrawableContainer Element, int Left, int Top, int Width, int Height, (List<Point> Points, int Left, int Top)? Line)> _places;
+
+        private PlaceSnapshot(List<(DrawableContainer, int, int, int, int, (List<Point>, int, int)?)> places)
+        {
+            _places = places;
+        }
+
+        internal static PlaceSnapshot Take(IEnumerable<DrawableContainer> elements)
+        {
+            var places = new List<(DrawableContainer, int, int, int, int, (List<Point>, int, int)?)>();
+            foreach (var element in elements)
+            {
+                Collect(element, places);
+            }
+
+            return new PlaceSnapshot(places);
+        }
+
+        private static void Collect(DrawableContainer element, List<(DrawableContainer, int, int, int, int, (List<Point>, int, int)?)> places)
+        {
+            (List<Point>, int, int)? line = element is FreehandContainer freehand ? freehand.TakeState() : null;
+            places.Add((element, element.Left, element.Top, element.Width, element.Height, line));
+            if (element is GroupContainer group)
+            {
+                foreach (var child in group.Children.OfType<DrawableContainer>())
+                {
+                    Collect(child, places);
+                }
+            }
+        }
+
+        internal void Apply()
+        {
+            foreach (var (element, left, top, width, height, line) in _places)
+            {
+                element.Invalidate();
+                element.Left = left;
+                element.Top = top;
+                element.Width = width;
+                element.Height = height;
+                if (line.HasValue && element is FreehandContainer freehand)
+                {
+                    freehand.RestoreState(line.Value);
+                }
+
+                element.Invalidate();
+            }
+        }
+    }
+
+    /// <summary>
+    /// 왕캡: undo of "뒤집기": the places before the flip come back (and the places after it are kept for the redo)
     /// </summary>
     internal sealed class FlipMemento : IMemento
     {
         private readonly List<DrawableContainer> _elements;
-        private readonly bool _horizontal;
+        private readonly PlaceSnapshot _state;
 
-        internal FlipMemento(IEnumerable<DrawableContainer> elements, bool horizontal)
+        /// <param name="elements">the flipped elements</param>
+        /// <param name="state">the places the undo brings back</param>
+        internal FlipMemento(IEnumerable<DrawableContainer> elements, PlaceSnapshot state)
         {
             _elements = elements.ToList();
-            _horizontal = horizontal;
+            _state = state;
         }
 
         public IMemento Restore()
         {
-            foreach (var element in _elements)
-            {
-                element.Flip(_horizontal);
-            }
-
-            return new FlipMemento(_elements, _horizontal);
+            var current = PlaceSnapshot.Take(_elements);
+            _state.Apply();
+            return new FlipMemento(_elements, current);
         }
 
         public bool Merge(IMemento otherMemento) => false;

@@ -3610,9 +3610,15 @@ namespace Greenshot.Editor.Forms
             };
             if (openFileDialog.ShowDialog() == DialogResult.OK)
             {
-                using (Stream streamRead = File.OpenRead(openFileDialog.FileName))
+                try
                 {
+                    using Stream streamRead = File.OpenRead(openFileDialog.FileName);
                     _surface.LoadElementsFromStream(streamRead);
+                }
+                catch (InvalidDataException)
+                {
+                    MessageBox.Show(this, "파일의 개체(그룹)가 올바르지 않아서 불러오지 않았어요.", "왕캡", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
                 }
 
                 _surface.Refresh();

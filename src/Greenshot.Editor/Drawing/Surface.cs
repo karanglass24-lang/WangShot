@@ -1423,13 +1423,23 @@ namespace Greenshot.Editor.Drawing
         /// <param name="streamRead"></param>
         public void LoadElementsFromStream(Stream streamRead)
         {
+            LoadElementsFromStream(streamRead, true);
+        }
+
+        /// <summary>
+        /// Load elements from a stream
+        /// </summary>
+        /// <param name="streamRead">Stream</param>
+        /// <param name="untrusted">true for files: groups are checked (circles, depth), false for the copy of our own elements (Clone)</param>
+        private void LoadElementsFromStream(Stream streamRead, bool untrusted)
+        {
             try
             {
                 BinaryFormatter binaryRead = new BinaryFormatter();
                 binaryRead.Binder = new BinaryFormatterHelper();
                 IDrawableContainerList loadedElements = (IDrawableContainerList) binaryRead.Deserialize(streamRead);
                 // 왕캡: a group which contains itself, is nested too deep or has elements which cannot be grouped would crash the drawing
-                if (!GroupContainer.IsValidTree(loadedElements))
+                if (untrusted && !GroupContainer.IsValidTree(loadedElements))
                 {
                     throw new InvalidDataException("The elements of the file are not valid (groups).");
                 }
@@ -1444,6 +1454,11 @@ namespace Greenshot.Editor.Drawing
             }
             catch (SecurityAccessDeniedException)
             {
+                throw;
+            }
+            catch (InvalidDataException)
+            {
+                // 왕캡: the caller has to tell the user, an editor which opens the file without its annotations would save them away
                 throw;
             }
             catch (Exception e)
@@ -1485,7 +1500,8 @@ namespace Greenshot.Editor.Drawing
                 using var ms = RecyclableMemoryStreamFactory.GetStream("Surface.Clone");
                 SaveElementsToStream(ms);
                 ms.Position = 0;
-                clonedSurface.LoadElementsFromStream(ms);
+                // Our own elements: no limits for the depth of groups
+                clonedSurface.LoadElementsFromStream(ms, false);
 
                 /* TODO: LoadElementsFromStream() selects all Elements, we don't want that in the clone.
                 * It should be changed there but that would be a breaking change, e.g. for copy/paste.
@@ -4482,11 +4498,12 @@ namespace Greenshot.Editor.Drawing
             if (!HasSelectedElements) return;
             // 왕캡: the flip can be undone (a flip again)
             var elements = selectedElements.OfType<DrawableContainer>().ToList();
+            var before = PlaceSnapshot.Take(elements);
             foreach (var element in elements)
             {
                 element.Flip(horizontal);
             }
-            MakeUndoable(new FlipMemento(elements, horizontal), false);
+            MakeUndoable(new FlipMemento(elements, before), false);
             Invalidate();
             _modified = true;
         }
@@ -4548,6 +4565,13 @@ namespace Greenshot.Editor.Drawing
             if (selected.Any(element => !GroupContainer.CanBeChild(element)))
             {
                 SendMessageEvent(this, SurfaceMessageTyp.Info, "모자이크, 흐림, 강조, 돋보기 같은 효과 개체와 말풍선, 찢어진 가장자리, 자르기 표시는 그룹으로 묶을 수 없어요. 해당 개체를 빼고 다시 선택해 주세요.");
+                return;
+            }
+
+            // The depth is limited like the depth of the groups which are accepted from files and the clipboard
+            if (1 + selected.Max(element => GroupContainer.NestingOf(element)) > GroupContainer.MaximumDepth)
+            {
+                SendMessageEvent(this, SurfaceMessageTyp.Info, "그룹 안에 그룹을 " + GroupContainer.MaximumDepth + "단계까지만 만들 수 있어요.");
                 return;
             }
 

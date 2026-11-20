@@ -45,11 +45,8 @@ namespace Greenshot.Editor.Memento
 
         private void Dispose(bool disposing)
         {
-            if (disposing)
-            {
-                _containerList?.Dispose();
-            }
-
+            // 왕캡: the elements are on the surface while this memento is in the undo or redo history (it is the inverse of a delete),
+            // the surface disposes them. Disposing them here destroyed the elements which were alive again after an undo of a delete.
             _containerList = null;
             _surface = null;
         }
