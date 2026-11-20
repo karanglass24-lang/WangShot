@@ -236,25 +236,67 @@ namespace Greenshot.Capturing
         }
 
         /// <summary>
-        /// 왕캡: scroll back by <paramref name="delta"/> and check that the view is the last accepted picture again.
-        /// A page which had moved less than the step scrolls too far up: then it is scrolled down in small steps (at most 10) until the view is the same.
+        /// 왕캡: the pictures are the same when only a small part of the sampled points differs (a caret, an animation, a header which appears)
         /// </summary>
-        /// <returns>false when the view could not be restored</returns>
-        private static async Task<bool> RestoreViewAsync(Rectangle rect, Bitmap lastFrame, int delta)
+        private static unsafe bool Similar(Bitmap a, Bitmap b, double maximumDifferentShare = 0.04)
+        {
+            var rect = new Rectangle(0, 0, a.Width, a.Height);
+            var dataA = a.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+            var dataB = b.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+            try
+            {
+                long samples = 0;
+                long different = 0;
+                for (int y = 0; y < a.Height; y += 3)
+                {
+                    byte* rowA = (byte*)dataA.Scan0 + y * dataA.Stride;
+                    byte* rowB = (byte*)dataB.Scan0 + y * dataB.Stride;
+                    for (int x = 0; x < a.Width; x += 5)
+                    {
+                        int i = x * 3;
+                        samples++;
+                        if (Math.Abs(rowA[i] - rowB[i]) + Math.Abs(rowA[i + 1] - rowB[i + 1]) + Math.Abs(rowA[i + 2] - rowB[i + 2]) > 12)
+                        {
+                            different++;
+                        }
+                    }
+                }
+
+                return samples > 0 && different <= samples * maximumDifferentShare;
+            }
+            finally
+            {
+                a.UnlockBits(dataA);
+                b.UnlockBits(dataB);
+            }
+        }
+
+        /// <summary>
+        /// 왕캡: scroll back by <paramref name="delta"/> and check that the view is the last accepted picture again (with a tolerance).
+        /// A page which had moved less than the step scrolls too far up: then it is scrolled down in small steps (at most 6) until the view fits.
+        /// Esc is checked in every round.
+        /// </summary>
+        /// <returns>Restored: the view fits the last picture; Stopped: the user pressed Esc</returns>
+        private static async Task<(bool Restored, bool Stopped)> RestoreViewAsync(Rectangle rect, Bitmap lastFrame, int delta)
         {
             mouse_event(0x0800 /* MOUSEEVENTF_WHEEL */, 0, 0, unchecked((uint)delta), UIntPtr.Zero);
-            for (int attempt = 0; attempt < 10; attempt++)
+            for (int attempt = 0; attempt < 6; attempt++)
             {
-                using var view = await GrabSettledAsync(rect, attempt == 0 ? 500 : 350).ConfigureAwait(false);
-                if (view != null && view.Size == lastFrame.Size && Same(lastFrame, view))
+                if ((GetAsyncKeyState(0x1B) & 0x8000) != 0)
                 {
-                    return true;
+                    return (false, true);
+                }
+
+                using var view = await GrabSettledAsync(rect, attempt == 0 ? 500 : 350).ConfigureAwait(false);
+                if (view != null && view.Size == lastFrame.Size && Similar(lastFrame, view))
+                {
+                    return (true, false);
                 }
 
                 mouse_event(0x0800, 0, 0, unchecked((uint)(-Math.Max(20, delta / 4))), UIntPtr.Zero);
             }
 
-            return false;
+            return (false, false);
         }
 
         private static async Task<(Bitmap Result, int Frames, bool StoppedByUser)> CaptureAllAsync(Rectangle rect, POINT originalCursor)
@@ -312,10 +354,18 @@ namespace Greenshot.Capturing
                         {
                             // 왕캡: when the page had moved less than the step (end of the page) the scroll back goes too far up:
                             // the view is checked against the last picture and scrolled down until it is the same, or the capture ends with what it has
-                            if (!await RestoreViewAsync(rect, lastFrame, delta).ConfigureAwait(false))
+                            var (restored, stoppedWhileRestoring) = await RestoreViewAsync(rect, lastFrame, delta).ConfigureAwait(false);
+                            if (stoppedWhileRestoring)
                             {
-                                Log.Warn("Scroll capture: the view could not be brought back to the last picture, the result so far is used");
+                                stopped = true;
                                 break;
+                            }
+
+                            if (!restored)
+                            {
+                                // Animated pages (caret, a header which appears when scrolling up) never match exactly: go on with the smaller step
+                                // from the view as it is, as before
+                                Log.Warn("Scroll capture: the view could not be matched to the last picture, going on with a smaller step");
                             }
 
                             delta = Math.Max(20, delta / 2);

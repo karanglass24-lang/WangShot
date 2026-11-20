@@ -44,9 +44,14 @@ namespace Greenshot.Editor.Memento
         private readonly List<(DrawableContainer Element, IField Field, object Value)> _values;
 
         internal FieldValuesMemento(IEnumerable<DrawableContainer> elements)
-            : this(elements.SelectMany(element => element.GetFields().Select(field => (element, field, field.Value))).ToList())
+            : this(elements.SelectMany(Targets).SelectMany(element => element.GetFields().Select(field => (element, field, field.Value))).ToList())
         {
         }
+
+        /// <summary>
+        /// The element, or all elements of a group (also in groups in the group): GetFields of a group reaches one level only
+        /// </summary>
+        private static IEnumerable<DrawableContainer> Targets(DrawableContainer element) => element is GroupContainer group ? group.Leaves() : new[] { element };
 
         private FieldValuesMemento(List<(DrawableContainer Element, IField Field, object Value)> values)
         {

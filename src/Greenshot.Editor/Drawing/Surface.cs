@@ -401,7 +401,8 @@ namespace Greenshot.Editor.Drawing
                     break;
                 }
 
-                if (IsOnSurface(possibleThis))
+                // 왕캡: the labels in a group are on the surface too, a group does not change the numbers
+                if (IsOnSurface(possibleThis) || _elements.OfType<GroupContainer>().Any(group => group.ContainsDescendant(possibleThis)))
                 {
                     number++;
                 }
@@ -1427,6 +1428,12 @@ namespace Greenshot.Editor.Drawing
                 BinaryFormatter binaryRead = new BinaryFormatter();
                 binaryRead.Binder = new BinaryFormatterHelper();
                 IDrawableContainerList loadedElements = (IDrawableContainerList) binaryRead.Deserialize(streamRead);
+                // 왕캡: a group which contains itself, is nested too deep or has elements which cannot be grouped would crash the drawing
+                if (!GroupContainer.IsValidTree(loadedElements))
+                {
+                    throw new InvalidDataException("The elements of the file are not valid (groups).");
+                }
+
                 loadedElements.Parent = this;
                 // Make sure the steplabels are sorted according to their number
                 _stepLabels.Sort((p1, p2) => p1.Number.CompareTo(p2.Number));
@@ -4537,9 +4544,10 @@ namespace Greenshot.Editor.Drawing
 
             // 왕캡: a filter (pixelate, blur, highlight, magnifier) works on the image below it at its place on the surface.
             // Inside a group it would be drawn as a plain frame and lose its effect, so such a selection is not grouped.
-            if (selected.Any(element => element is FilterContainer || element is DrawableContainer { HasFilters: true }))
+            // The speech bubble, the torn edge, the cut mark and the crop have coordinates of the surface (tail, image) which a group does not move.
+            if (selected.Any(element => !GroupContainer.CanBeChild(element)))
             {
-                SendMessageEvent(this, SurfaceMessageTyp.Info, "모자이크, 흐림, 강조, 돋보기 같은 효과 개체는 그룹으로 묶을 수 없어요. 효과 개체를 빼고 다시 선택해 주세요.");
+                SendMessageEvent(this, SurfaceMessageTyp.Info, "모자이크, 흐림, 강조, 돋보기 같은 효과 개체와 말풍선, 찢어진 가장자리, 자르기 표시는 그룹으로 묶을 수 없어요. 해당 개체를 빼고 다시 선택해 주세요.");
                 return;
             }
 

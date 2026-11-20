@@ -20,6 +20,7 @@
  */
 
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -78,6 +79,28 @@ namespace Greenshot.Editor.Drawing
             Point[] points = capturePoints.ToArray();
 
             matrix.TransformPoints(points);
+            capturePoints.Clear();
+            capturePoints.AddRange(points);
+            RecalculatePath();
+        }
+
+        /// <summary>
+        /// 왕캡: the real bounds of the drawn path on the surface (Bounds is the whole image), used for the bounds of a group
+        /// </summary>
+        internal NativeRect PathBounds => myBounds.IsEmpty
+            ? new NativeRect(Left, Top, 0, 0)
+            : new NativeRect(myBounds.Left + Left, myBounds.Top + Top, myBounds.Width, myBounds.Height);
+
+        /// <summary>
+        /// 왕캡: transform inside a group: the path is relative to Left and Top, the matrix works on the coordinates of the group,
+        /// so the offset is added to the points first. Left and Top are 0 afterwards.
+        /// </summary>
+        internal void TransformInParent(Matrix matrix)
+        {
+            Point[] points = capturePoints.Select(point => new Point(point.X + Left, point.Y + Top)).ToArray();
+            matrix.TransformPoints(points);
+            Left = 0;
+            Top = 0;
             capturePoints.Clear();
             capturePoints.AddRange(points);
             RecalculatePath();

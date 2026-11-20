@@ -18,6 +18,7 @@ namespace Greenshot.Editor.Helpers
         {
             string folder = Path.GetDirectoryName(Path.GetFullPath(target));
             string temp = Path.Combine(folder, "~wangshot-" + Guid.NewGuid().ToString("N") + Path.GetExtension(target));
+            bool keepTemp = false;
             try
             {
                 try
@@ -33,18 +34,81 @@ namespace Greenshot.Editor.Helpers
                     EnsureWritten(temp);
                 }
 
-                if (File.Exists(target))
+                if (!File.Exists(target))
+                {
+                    File.Move(temp, target);
+                    return;
+                }
+
+                try
                 {
                     File.Replace(temp, target, null);
                 }
-                else
+                catch (Exception replaceException)
                 {
-                    File.Move(temp, target);
+                    // File.Replace needs more than writing: it fails when the target is open in another program (which allows writing, but not
+                    // deleting). Then the content is copied over the target, as writing the file directly did before.
+                    keepTemp = true;
+                    CopyOver(temp, target, replaceException);
+                    keepTemp = false;
                 }
             }
             finally
             {
-                TryDelete(temp);
+                if (!keepTemp)
+                {
+                    TryDelete(temp);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Copy the new file over the target. The old target is saved first and put back when the copy fails.
+        /// </summary>
+        /// <exception cref="IOException">when the copy failed: the message has the path of the temporary file, which is kept</exception>
+        private static void CopyOver(string temp, string target, Exception replaceException)
+        {
+            string backup = target + ".~wangshot-" + Guid.NewGuid().ToString("N");
+            bool hasBackup = false;
+            try
+            {
+                File.Copy(target, backup, true);
+                hasBackup = true;
+            }
+            catch (Exception)
+            {
+                // No backup possible (e.g. the target cannot be read): the copy is tried anyway
+            }
+
+            try
+            {
+                File.Copy(temp, target, true);
+            }
+            catch (Exception copyException)
+            {
+                var error = new AggregateException(replaceException, copyException);
+                if (!hasBackup)
+                {
+                    throw new IOException("The file could not be replaced, the new file is " + temp, error);
+                }
+
+                try
+                {
+                    File.Copy(backup, target, true);
+                }
+                catch (Exception)
+                {
+                    // The old content stays in the backup file
+                    throw new IOException("The file could not be replaced, the new file is " + temp + ", the old content is in " + backup, error);
+                }
+
+                TryDelete(backup);
+                throw new IOException("The file could not be replaced, the new file is " + temp, error);
+            }
+
+            if (hasBackup)
+            {
+                TryDelete(backup);
             }
         }
 

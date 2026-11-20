@@ -93,5 +93,36 @@ namespace Greenshot.Tests.Editor
 
             Assert.False(Directory.GetFiles(_folder).Any());
         }
+
+        [Fact]
+        public void TargetOpenInAnotherProgram_WhichAllowsWriting_IsStillReplaced()
+        {
+            string target = Path.Combine(_folder, "out.pdf");
+            File.WriteAllText(target, "old");
+            using (new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            {
+                SafeFileWriter.Write(target, temp => File.WriteAllText(temp, "new"), null);
+            }
+
+            Assert.Equal("new", File.ReadAllText(target));
+            Assert.Single(Directory.GetFiles(_folder));
+        }
+
+        [Fact]
+        public void TargetLocked_KeepsTheOldFile_AndTheTemporaryFileIsNamedInTheError()
+        {
+            string target = Path.Combine(_folder, "out.pdf");
+            File.WriteAllText(target, "old");
+            IOException error;
+            using (new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                error = Assert.Throws<IOException>(() => SafeFileWriter.Write(target, temp => File.WriteAllText(temp, "new"), null));
+            }
+
+            Assert.Equal("old", File.ReadAllText(target));
+            string temporary = Directory.GetFiles(_folder).Single(file => file != target);
+            Assert.Equal("new", File.ReadAllText(temporary));
+            Assert.Contains(temporary, error.Message);
+        }
     }
 }

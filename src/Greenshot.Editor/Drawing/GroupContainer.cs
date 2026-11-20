@@ -25,6 +25,7 @@ using System.ComponentModel;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.Serialization;
 using Dapplo.Windows.Common.Extensions;
 using Dapplo.Windows.Common.Structs;
@@ -42,15 +43,25 @@ namespace Greenshot.Editor.Drawing
     /// 왕샷: 여러 개체를 하나로 묶는 그룹 컨테이너.
     /// 자식 개체들의 경계를 따라 움직이며, 그룹 전체를 하나의 개체처럼 다룰 수 있다.
     /// 자식들의 Parent는 여전히 Surface이며, GroupContainer는 논리적 그룹만 관리한다.
+    /// 왕캡: the children have coordinates relative to the group (Left and Top of the group are their origin).
     /// </summary>
     [Serializable]
     public class GroupContainer : DrawableContainer
     {
         private static readonly ILog LOG = LogManager.GetLogger(typeof(GroupContainer));
 
+        /// <summary>
+        /// 왕캡: deepest nesting of groups which is accepted from the clipboard and from files
+        /// </summary>
+        internal const int MaximumDepth = 8;
+
+        private const int MaximumNodes = 10000;
+
         private bool _updatingChildren = false;
         // 왕캡: not serialized (the clipboard and .greenshot files only allow known types)
         [NonSerialized] private NativeRect _lastChildrenBounds = NativeRect.Empty;
+        [NonSerialized] private bool _switchingParent;
+        [NonSerialized] private bool _disposed;
 
         public GroupContainer(ISurface parent) : base(parent)
         {
@@ -72,6 +83,15 @@ namespace Greenshot.Editor.Drawing
                 child.PropertyChanged -= Child_PropertyChanged;
                 child.PropertyChanged += Child_PropertyChanged;
             }
+
+            // 왕캡: a field change of a child (the children invalidate their own, group relative, area only) redraws the area of the group
+            FieldChanged -= Group_FieldChanged;
+            FieldChanged += Group_FieldChanged;
+        }
+
+        private void Group_FieldChanged(object sender, FieldChangedEventArgs e)
+        {
+            Invalidate();
         }
 
         /// <summary>
@@ -80,11 +100,147 @@ namespace Greenshot.Editor.Drawing
         /// </summary>
         protected override void SwitchParent(ISurface newParent)
         {
-            base.SwitchParent(newParent);
+            // A group which (wrongly) contains itself must not run in circles
+            if (_switchingParent)
+            {
+                return;
+            }
+
+            _switchingParent = true;
+            try
+            {
+                base.SwitchParent(newParent);
+                foreach (var child in Children.OfType<IDrawableContainer>())
+                {
+                    child.Parent = newParent;
+                }
+            }
+            finally
+            {
+                _switchingParent = false;
+            }
+        }
+
+        /// <summary>
+        /// 왕캡: false for the elements which cannot be in a group: the filters work on the image below them at their place on the surface,
+        /// and the speech bubble, the torn edge, the cut mark and the crop have coordinates of the surface (tail, image) which a group does not move.
+        /// </summary>
+        internal static bool CanBeChild(IDrawableContainer element)
+        {
+            return element is DrawableContainer container
+                   && container is not FilterContainer
+                   && container is not SpeechbubbleContainer
+                   && container is not TornEdgeContainer
+                   && container is not CutMarkContainer
+                   && container is not CropContainer
+                   && !container.HasFilters;
+        }
+
+        /// <summary>
+        /// 왕캡: checks elements which come from the clipboard or from a file: no group in a group in a circle, not deeper than
+        /// <see cref="MaximumDepth"/>, only elements which can be in a group. One wrong element makes the whole list invalid.
+        /// </summary>
+        internal static bool IsValidTree(IEnumerable<IDrawableContainer> elements)
+        {
+            if (elements == null)
+            {
+                return false;
+            }
+
+            int nodes = 0;
+            foreach (var element in elements)
+            {
+                if (!IsValidNode(element, new HashSet<object>(ReferenceComparer.Instance), 0, ref nodes))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool IsValidNode(object node, HashSet<object> path, int depth, ref int nodes)
+        {
+            if (node is not DrawableContainer container || depth > MaximumDepth || ++nodes > MaximumNodes)
+            {
+                return false;
+            }
+
+            if (!path.Add(container))
+            {
+                return false;
+            }
+
+            try
+            {
+                foreach (var child in container.Children)
+                {
+                    if (container is GroupContainer)
+                    {
+                        if (child is not IDrawableContainer drawable || !CanBeChild(drawable) || !IsValidNode(child, path, depth + 1, ref nodes))
+                        {
+                            return false;
+                        }
+                    }
+                    else if (child is IDrawableContainer)
+                    {
+                        // Other elements only have filters as children
+                        return false;
+                    }
+                }
+            }
+            finally
+            {
+                path.Remove(container);
+            }
+
+            return true;
+        }
+
+        private sealed class ReferenceComparer : IEqualityComparer<object>
+        {
+            internal static readonly ReferenceComparer Instance = new ReferenceComparer();
+
+            public new bool Equals(object x, object y) => ReferenceEquals(x, y);
+
+            public int GetHashCode(object obj) => RuntimeHelpers.GetHashCode(obj);
+        }
+
+        /// <summary>
+        /// 왕캡: all elements in the group and in the groups in it, without the groups themselves
+        /// </summary>
+        internal IEnumerable<DrawableContainer> Leaves()
+        {
+            foreach (var child in Children.OfType<DrawableContainer>())
+            {
+                if (child is GroupContainer group)
+                {
+                    foreach (var leaf in group.Leaves())
+                    {
+                        yield return leaf;
+                    }
+                }
+                else
+                {
+                    yield return child;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 왕캡: true when the element is a child of this group or of a group in it
+        /// </summary>
+        internal bool ContainsDescendant(IDrawableContainer element)
+        {
             foreach (var child in Children.OfType<IDrawableContainer>())
             {
-                child.Parent = newParent;
+                if (ReferenceEquals(child, element) || (child is GroupContainer group && group.ContainsDescendant(element)))
+                {
+                    return true;
+                }
             }
+
+            return false;
         }
 
         public override bool HasDefaultSize => false;
@@ -93,7 +249,7 @@ namespace Greenshot.Editor.Drawing
 
         public override void ResetToDefaultSize()
         {
-            UpdateBoundsFromChildren();
+            RecomputeLocalBounds();
         }
 
         protected override void InitializeFields()
@@ -104,7 +260,22 @@ namespace Greenshot.Editor.Drawing
         }
 
         /// <summary>
-        /// 자식 개체들의 경계를 계산해서 자신의 크기/위치 업데이트
+        /// 왕캡: the bounds of a child in the coordinates of its parent. A freehand line has the size of the image as bounds,
+        /// its path is used instead.
+        /// </summary>
+        private static NativeRect BoundsOf(IDrawableContainer child)
+        {
+            if (child is FreehandContainer freehand)
+            {
+                return freehand.PathBounds;
+            }
+
+            return child.Bounds.Normalize();
+        }
+
+        /// <summary>
+        /// 자식 개체들의 경계를 계산해서 자신의 크기/위치 업데이트.
+        /// 왕캡: only for children which still have the coordinates of the surface (when they are put into the group): they are made relative to the group.
         /// </summary>
         public void UpdateBoundsFromChildren()
         {
@@ -118,15 +289,8 @@ namespace Greenshot.Editor.Drawing
             var bounds = NativeRect.Empty;
             foreach (var child in Children.OfType<IDrawableContainer>())
             {
-                var childBounds = child.Bounds.Normalize();
-                if (bounds.IsEmpty)
-                {
-                    bounds = childBounds;
-                }
-                else
-                {
-                    bounds = bounds.Union(childBounds);
-                }
+                var childBounds = BoundsOf(child);
+                bounds = bounds.IsEmpty ? childBounds : bounds.Union(childBounds);
             }
 
             // 자식 위치를 그룹 로컬 좌표로 변환
@@ -143,6 +307,42 @@ namespace Greenshot.Editor.Drawing
             {
                 child.Left -= dx;
                 child.Top -= dy;
+            }
+
+            _lastChildrenBounds = new NativeRect(0, 0, Width, Height);
+        }
+
+        /// <summary>
+        /// 왕캡: the group fits its children again, they already have coordinates relative to the group: the group moves by the
+        /// offset of the box of its children and the children move back by it, so nothing moves on the surface.
+        /// </summary>
+        private void RecomputeLocalBounds()
+        {
+            var bounds = NativeRect.Empty;
+            foreach (var child in Children.OfType<IDrawableContainer>())
+            {
+                var childBounds = BoundsOf(child);
+                bounds = bounds.IsEmpty ? childBounds : bounds.Union(childBounds);
+            }
+
+            if (bounds.IsEmpty)
+            {
+                return;
+            }
+
+            int dx = bounds.Left;
+            int dy = bounds.Top;
+            Left += dx;
+            Top += dy;
+            Width = bounds.Width;
+            Height = bounds.Height;
+            if (dx != 0 || dy != 0)
+            {
+                foreach (var child in Children.OfType<IDrawableContainer>())
+                {
+                    child.Left -= dx;
+                    child.Top -= dy;
+                }
             }
 
             _lastChildrenBounds = new NativeRect(0, 0, Width, Height);
@@ -174,11 +374,34 @@ namespace Greenshot.Editor.Drawing
 
         private void Child_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
-            if (!_updatingChildren && (e.PropertyName == nameof(Left) || e.PropertyName == nameof(Top) || 
+            if (!_updatingChildren && (e.PropertyName == nameof(Left) || e.PropertyName == nameof(Top) ||
                 e.PropertyName == nameof(Width) || e.PropertyName == nameof(Height) || e.PropertyName == "Bounds"))
             {
-                UpdateBoundsFromChildren();
+                RecomputeLocalBounds();
                 Invalidate();
+            }
+        }
+
+        /// <summary>
+        /// 왕캡: the area to redraw in the coordinates of the surface: the areas of the children moved by the position of the group
+        /// </summary>
+        public override NativeRect DrawingBounds
+        {
+            get
+            {
+                var bounds = NativeRect.Empty;
+                foreach (var child in Children.OfType<DrawableContainer>())
+                {
+                    var childBounds = child.DrawingBounds;
+                    bounds = bounds.IsEmpty ? childBounds : bounds.Union(childBounds);
+                }
+
+                if (bounds.IsEmpty)
+                {
+                    return base.DrawingBounds;
+                }
+
+                return new NativeRect(bounds.Left + Left, bounds.Top + Top, bounds.Width, bounds.Height);
             }
         }
 
@@ -204,9 +427,10 @@ namespace Greenshot.Editor.Drawing
 
         public override bool Contains(int x, int y)
         {
+            // 왕캡: the point is in the coordinates of the surface, the children have coordinates relative to the group
             foreach (var child in Children.OfType<DrawableContainer>())
             {
-                if (child.Contains(x + Left, y + Top))
+                if (child.Contains(x - Left, y - Top))
                 {
                     return true;
                 }
@@ -250,25 +474,30 @@ namespace Greenshot.Editor.Drawing
             return base.HandleMouseMove(x, y);
         }
 
-        public override void Invalidate()
-        {
-            base.Invalidate();
-            foreach (var child in Children.OfType<IDrawableContainer>())
-            {
-                child.Invalidate();
-            }
-        }
-
         public override void Flip(bool horizontal)
         {
             _updatingChildren = true;
             try
             {
+                Invalidate();
                 // 왕캡: the children are mirrored in the box of the group (their places swap too), not each in its own box
                 foreach (var child in Children.OfType<DrawableContainer>())
                 {
-                    child.Invalidate();
-                    if (horizontal)
+                    if (child is GroupContainer inner)
+                    {
+                        // A group has no negative size: it moves to the mirrored place and mirrors its own children
+                        if (horizontal)
+                        {
+                            inner.Left = Width - (inner.Left + inner.Width);
+                        }
+                        else
+                        {
+                            inner.Top = Height - (inner.Top + inner.Height);
+                        }
+
+                        inner.Flip(horizontal);
+                    }
+                    else if (horizontal)
                     {
                         child.Left = Width - child.Left;
                         child.Width = -child.Width;
@@ -279,13 +508,63 @@ namespace Greenshot.Editor.Drawing
                         child.Height = -child.Height;
                     }
                 }
-                UpdateBoundsFromChildren();
+
+                // 왕캡: local, the box of the group does not move (the surface coordinates would send the group to 0,0)
+                RecomputeLocalBounds();
             }
             finally
             {
                 _updatingChildren = false;
             }
             Invalidate();
+        }
+
+        /// <summary>
+        /// 왕캡: image resize or rotation: the group gets the new box, the children are transformed in the coordinates of the group
+        /// </summary>
+        public override void Transform(Matrix matrix)
+        {
+            if (matrix == null)
+            {
+                return;
+            }
+
+            Point[] corners =
+            {
+                new Point(Left, Top), new Point(Left + Width, Top + Height)
+            };
+            matrix.TransformPoints(corners);
+            var newBox = new NativeRect(corners[0].X, corners[0].Y, corners[1].X - corners[0].X, corners[1].Y - corners[0].Y).Normalize();
+
+            _updatingChildren = true;
+            try
+            {
+                // children: from the group to the surface, the matrix of the transformation, from the surface to the new group
+                using var childMatrix = new Matrix();
+                childMatrix.Translate(Left, Top, MatrixOrder.Append);
+                childMatrix.Multiply(matrix, MatrixOrder.Append);
+                childMatrix.Translate(-newBox.Left, -newBox.Top, MatrixOrder.Append);
+                foreach (var child in Children.OfType<DrawableContainer>())
+                {
+                    if (child is FreehandContainer freehand)
+                    {
+                        freehand.TransformInParent(childMatrix);
+                    }
+                    else
+                    {
+                        child.Transform(childMatrix);
+                    }
+                }
+
+                Left = newBox.Left;
+                Top = newBox.Top;
+                Width = newBox.Width;
+                Height = newBox.Height;
+            }
+            finally
+            {
+                _updatingChildren = false;
+            }
         }
 
         public override void ApplyFormat(FormatSnapshot format)
@@ -322,6 +601,24 @@ namespace Greenshot.Editor.Drawing
             {
                 _updatingChildren = false;
             }
+        }
+
+        /// <summary>
+        /// 왕캡: the children are disposed with the group (bitmaps of images). After an ungroup the group has no children any more,
+        /// they belong to the surface then.
+        /// </summary>
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && !_disposed)
+            {
+                _disposed = true;
+                foreach (var child in Children.OfType<IDrawableContainer>().ToList())
+                {
+                    child.Dispose();
+                }
+            }
+
+            base.Dispose(disposing);
         }
     }
 }

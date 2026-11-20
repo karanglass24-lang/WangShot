@@ -90,7 +90,16 @@ namespace Greenshot.Editor.Drawing
                 {
                     Binder = new BinaryFormatterHelper()
                 };
-                return binaryFormatter.Deserialize(stream) as IDrawableContainerList;
+                var elements = binaryFormatter.Deserialize(stream) as IDrawableContainerList;
+                // 왕캡: a group which contains itself, is nested too deep or has elements which cannot be grouped would crash the drawing:
+                // the whole list is refused
+                if (elements != null && !GroupContainer.IsValidTree(elements))
+                {
+                    Log.Warn("The Greenshot elements of the clipboard have invalid groups, they are not used.");
+                    return null;
+                }
+
+                return elements;
             }
             catch (Exception ex)
             {

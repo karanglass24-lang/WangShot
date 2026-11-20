@@ -16,7 +16,15 @@ namespace Greenshot.Tests.Editor
         [InlineData("전화 02-123-4567", "02-123-4567")]
         [InlineData("mail: hong.gildong+x@example.co.kr 로", "hong.gildong+x@example.co.kr")]
         [InlineData("주민 900101-1234567", "900101-1234567")]
-        [InlineData("카드 1234-5678-9012-3456", "1234-5678-9012-3456")]
+        [InlineData("카드 4111-1111-1111-1111", "4111-1111-1111-1111")]
+        [InlineData("카드 4111 1111 1111 1111", "4111 1111 1111 1111")]
+        [InlineData("Amex 3782 822463 10005", "3782 822463 10005")]
+        [InlineData("Amex 378282246310005", "378282246310005")]
+        [InlineData("+82 10-1234-5678", "+82 10-1234-5678")]
+        [InlineData("+82-10-1234-5678", "+82-10-1234-5678")]
+        [InlineData("(02) 123-4567", "(02) 123-4567")]
+        [InlineData("02)123-4567", "02)123-4567")]
+        [InlineData("주민 9001011234568", "9001011234568")]
         [InlineData("010- 1234- 5678", "010- 1234- 5678")]
         [InlineData("010 -1234 -5678", "010 -1234 -5678")]
         [InlineData("전화 02- 123- 4567", "02- 123- 4567")]
@@ -36,6 +44,13 @@ namespace Greenshot.Tests.Editor
         [InlineData("2026-11-20 12:30")]
         [InlineData("버전 1.5.7.0")]
         [InlineData("0123456789")]
+        [InlineData("1234.5678.9012.3456")]
+        [InlineData("4111 1111 1111 1112")]
+        [InlineData("05 - 2024 - 1231")]
+        [InlineData("2023 2024 2025 2026")]
+        [InlineData("02 2024 1120")]
+        [InlineData("8801234567890")]
+        [InlineData("192.168.010.123 4567")]
         [InlineData("")]
         [InlineData(null)]
         public void FindRanges_IgnoresOtherText(string text)
@@ -54,7 +69,7 @@ namespace Greenshot.Tests.Editor
         public void FindAreas_MatchesSharingAWord_GiveOneMergedArea()
         {
             // The phone number (words 0-2) and the card number (words 1-4) share words: one box, not two overlapping ones
-            var line = Line(("010", 0), ("1234", 50), ("5678", 100), ("9012", 150), ("3456", 200));
+            var line = Line(("010", 0), ("4111", 50), ("1111", 100), ("1111", 150), ("1111", 200));
 
             var areas = SensitiveInfoMatcher.FindAreas(new[] { line });
 
@@ -88,6 +103,28 @@ namespace Greenshot.Tests.Editor
         public void IsLuhnValid_ChecksTheCheckDigit(string digits, bool expected)
         {
             Assert.Equal(expected, SensitiveInfoMatcher.IsLuhnValid(digits));
+        }
+
+        [Fact]
+        public void FindRanges_LongLine_IsFast()
+        {
+            string digits = new string('1', 50000);
+            string withAt = new string('a', 30000) + "@";
+
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            SensitiveInfoMatcher.FindRanges(digits).ToList();
+            SensitiveInfoMatcher.FindRanges(withAt).ToList();
+            SensitiveInfoMatcher.FindRanges(new string('1', 5000) + " hong@example.com").ToList();
+
+            Assert.True(watch.ElapsedMilliseconds < 3000, "took " + watch.ElapsedMilliseconds + " ms");
+        }
+
+        [Fact]
+        public void FindRanges_NormalLine_StillFindsTheEmail()
+        {
+            var found = SensitiveInfoMatcher.FindRanges("mail hong@example.com ok").ToList();
+
+            Assert.Single(found);
         }
     }
 }

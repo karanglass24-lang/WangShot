@@ -236,19 +236,35 @@ namespace Greenshot.Editor.Drawing.Fields
             foreach (var drawableContainer1 in _boundContainers.ToList())
             {
                 var drawableContainer = (DrawableContainer) drawableContainer1;
-                if (!drawableContainer.HasField(field.FieldType))
+                // 왕캡: a group gives the change to all of its elements (GetField finds the first child only)
+                if (drawableContainer is GroupContainer group)
                 {
+                    foreach (var leaf in group.Leaves())
+                    {
+                        ApplyField(leaf, field);
+                    }
+
                     continue;
                 }
 
-                IField drawableContainerField = drawableContainer.GetField(field.FieldType);
-                // Notify before change, so we can e.g. invalidate the area
-                drawableContainer.BeforeFieldChange(drawableContainerField, field.Value);
-
-                drawableContainerField.Value = field.Value;
-                // update last used from DC field, so that scope is honored
-                EditorConfigurationHelper.UpdateLastFieldValue(EditorConfig, drawableContainerField);
+                ApplyField(drawableContainer, field);
             }
+        }
+
+        private static void ApplyField(DrawableContainer drawableContainer, IField field)
+        {
+            if (!drawableContainer.HasField(field.FieldType))
+            {
+                return;
+            }
+
+            IField drawableContainerField = drawableContainer.GetField(field.FieldType);
+            // Notify before change, so we can e.g. invalidate the area
+            drawableContainer.BeforeFieldChange(drawableContainerField, field.Value);
+
+            drawableContainerField.Value = field.Value;
+            // update last used from DC field, so that scope is honored
+            EditorConfigurationHelper.UpdateLastFieldValue(EditorConfig, drawableContainerField);
         }
     }
 }
