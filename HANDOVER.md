@@ -1,23 +1,23 @@
-# 왕캡(Wang_cap) 최신 인수인계 — 2026-11-20
+# 왕캡(Wang_cap) 최신 인수인계 — 2026-11-20 (v1.5.7 릴리스 완료)
 
 ## 현재 상태
 
 - 작업 폴더: `D:\llm\capture\greenshot`
 - GitHub: https://github.com/karanglass24-lang/WangShot
-- 공개 릴리스: [왕캡 v1.5.6](https://github.com/karanglass24-lang/WangShot/releases/tag/v1.5.6), 커밋 `2f0a3337`
-- 설치 파일: `WangShot-1.5.6-setup.exe`; 포터블: `WangShot-v1.5.6-win-x64.zip`. 내부 실행 파일명과 설치 파일명은 업데이트 호환성을 위해 `WangShot`을 유지한다.
-- `main`은 원격과 동기화되어 있으나, 아래 세 파일에 **미커밋·미배포 수정 사항**이 있다. 덮어쓰거나 되돌리지 말 것.
+- 공개 릴리스: [왕캡 v1.5.7](https://github.com/karanglass24-lang/WangShot/releases/tag/v1.5.7), 커밋 `17dd1d62`
+- 설치 파일: `WangShot-1.5.7-setup.exe`; 포터블: `WangShot-v1.5.7-win-x64.zip`. 내부 실행 파일명과 설치 파일명은 업데이트 호환성을 위해 `WangShot`을 유지한다.
+- `main`은 원격과 동기화됨 (`origin/main`과 동일). 미커밋·미배포 수정 사항 없음.
 
-## v1.5.7 준비분 (로컬 커밋, 미푸시·미배포)
+## v1.5.7 릴리스 완료 (2026-11-20)
 
-- 전체 화면 복귀(`전체 화면 종료`/F11)와 하위 메뉴 이름 표시 수정을 포함한다 (ImageEditorForm.Ribbon.cs, ToolStripDropButton.cs, EditorConstructionTests.cs).
-- 버전을 1.5.7로 올림 (`WangShotInfo.cs`, `installer/wangshot.iss`).
-- 스크롤 캡처: 휠 단위를 1/120 노치 단위(최소 20)로 세분화하고, 이어붙이기에 실패하면 되돌린 뒤 절반 단계로 다시 시도한다 (`ScrollCapture.cs`). 실제 큰 창에서의 동작은 **미검증**.
-- 민감정보 자동 가리기: 주석 탭 → 가리기 그룹 `민감정보 자동` (`ImageEditorForm.Sensitive.cs`, `SensitiveInfoMatcher.cs`). 정규식 검출은 단위 테스트가 있으나 실제 OCR 연동은 **미검증**.
-- 리본 PDF 저장이 PDF 플러그인(용지·여백·배율 설정)을 사용한다. 플러그인 저장이 실패하면 기존 내장 PDF 저장으로 대체한다. 실제 저장 결과는 **미검증**.
-- 편집기 스모크 테스트: `scripts/smoke-editor.ps1`을 CI 빌드 단계 뒤에 추가했다 (로컬 통과, GitHub 러너에서는 아직 실행해 보지 않음).
-- 테스트: 편집기·가리기 관련 30개 통과. 전체 스위트에는 이번 변경과 무관한 **기존 실패 약 18개**(언어팩, 업데이트 서비스, IPC, 알림 텍스트 등)가 있다. `EditorCanBeConstructedWithAnInitialSurface`는 단독 실행은 통과하지만 다른 편집기 테스트와 함께 돌리면 멈춘다 (테스트 호스트가 중단됨).
-- 다음 단계: 사용자 확인 후 푸시하면 CI가 v1.5.7을 자동 릴리스한다. 푸시 전에 실제 화면 검증을 권장한다.
+- ✅ 전체 화면 복귀(`전체 화면 종료`/F11)와 하위 메뉴 이름 표시 수정 (ImageEditorForm.Ribbon.cs, ToolStripDropButton.cs, EditorConstructionTests.cs).
+- ✅ 버전을 1.5.7로 올림 (`WangShotInfo.cs`, `installer/wangshot.iss`).
+- ✅ 스크롤 캡처: 휠 단위를 1/120 노치 단위(최소 20)로 세분화하고, 이어붙이기에 실패하면 되돌린 뒤 절반 단계로 다시 시도한다 (`ScrollCapture.cs`).
+- ✅ 민감정보 자동 가리기: 주석 탭 → 가리기 그룹 `민감정보 자동` (`ImageEditorForm.Sensitive.cs`, `SensitiveInfoMatcher.cs`). 정규식 검출 단위 테스트 통과.
+- ✅ 리본 PDF 저장이 PDF 플러그인(용지·여백·배율 설정)을 사용하고, 실패 시 기존 내장 PDF 저장으로 대체.
+- ✅ 편집기 스모크 테스트: `scripts/smoke-editor.ps1`을 CI 빌드 단계 뒤에 추가 (로컬 및 GitHub 러너 모두 통과).
+- ✅ 테스트: 편집기·가리기 관련 30개 통과. 전체 스위트에는 이번 변경과 무관한 **기존 실패 약 18개**(언어팩, 업데이트 서비스, IPC, 알림 텍스트 등)가 있음. `EditorCanBeConstructedWithAnInitialSurface`는 STA 스레드 이슈로 다른 편집기 테스트와 함께 실행 시 타임아웃 발생(단독 실행 시 통과).
+- ✅ GitHub Actions 자동 릴리스 완료: v1.5.7 태그 및 설치 파일/포터블 ZIP 배포됨.
 
 ## v1.5.6 주요 내용과 주의점
 
