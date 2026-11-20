@@ -121,7 +121,17 @@ namespace Greenshot.Editor.FileFormatHandlers
                 using BinaryReader reader = new BinaryReader(surfaceFileStream);
                 long bytesWritten = reader.ReadInt64();
                 surfaceFileStream.Seek(-(bytesWritten + fileSizeLocation), SeekOrigin.End);
-                returnSurface.LoadElementsFromStream(surfaceFileStream);
+                try
+                {
+                    returnSurface.LoadElementsFromStream(surfaceFileStream);
+                }
+                catch (InvalidDataException)
+                {
+                    // 왕캡: nothing is opened, the copy of the image and the new surface are released
+                    captureBitmap?.Dispose();
+                    (returnSurface as IDisposable)?.Dispose();
+                    throw;
+                }
             }
 
             if (captureBitmap != null)

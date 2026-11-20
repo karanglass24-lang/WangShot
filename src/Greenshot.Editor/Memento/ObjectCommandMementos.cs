@@ -120,10 +120,15 @@ namespace Greenshot.Editor.Memento
     internal sealed class FieldValuesMemento : IMemento
     {
         private readonly List<(DrawableContainer Element, IField Field, object Value)> _values;
+        private readonly IFieldType _changedType;
 
-        internal FieldValuesMemento(IEnumerable<DrawableContainer> elements)
+        /// <param name="elements">the elements</param>
+        /// <param name="changedType">the type of the one field which is changed (changes of the same field merge into one step);
+        /// null for a change of several fields (the format painter): never merged</param>
+        internal FieldValuesMemento(IEnumerable<DrawableContainer> elements, IFieldType changedType = null)
             : this(elements.SelectMany(Targets).SelectMany(element => element.GetFields().Select(field => (element, field, field.Value))).ToList())
         {
+            _changedType = changedType;
         }
 
         /// <summary>
@@ -153,7 +158,9 @@ namespace Greenshot.Editor.Memento
         /// A change of the same fields right after this one (e.g. a color which is dragged in a color picker) is the same undo step
         /// </summary>
         public bool Merge(IMemento otherMemento) =>
-            otherMemento is FieldValuesMemento other
+            _changedType != null
+            && otherMemento is FieldValuesMemento other
+            && Equals(other._changedType, _changedType)
             && other._values.Count == _values.Count
             && other._values.Zip(_values, (a, b) => ReferenceEquals(a.Field, b.Field)).All(same => same);
 

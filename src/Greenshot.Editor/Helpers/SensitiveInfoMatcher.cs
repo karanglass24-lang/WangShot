@@ -24,7 +24,10 @@ namespace Greenshot.Editor.Helpers
 
         // A number which follows another number directly with a dot ("192.168.010.123 4567", "1.5.010") is part of that number.
         // "1. 010-1234-5678" (a list number) and "2026.11.20. 010-1234-5678" (a date) are not: the dot has a space after it.
-        private const string NotAfterNumber = @"(?<!\d)(?<!\d\.)";
+        // Only a dot behind three digits ("192.168.") counts as part of a number: "1.010-1234-5678" is a list number and a phone number.
+        private const string NotAfterNumber = @"(?<![0-9])(?<![0-9]{3}\.)";
+        // A card is not part of a code or a version either ("v2024.1120.1530.0045", "ABCD-1234-5678-9012-3456")
+        private const string CardStart = NotAfterNumber + @"(?<![A-Za-z])(?<![0-9A-Za-z][-.])";
         private const string NotBeforeNumber = @"(?!\d)(?![-.]\d)";
 
         // Area codes of Korea: Seoul, the provinces, internet phone and free of charge numbers
@@ -41,7 +44,8 @@ namespace Greenshot.Editor.Helpers
         {
             internal Pattern(string expression, Func<string, bool> isValid = null, char? requiredCharacter = null)
             {
-                Regex = new Regex(expression, RegexOptions.Compiled, MatchTimeout);
+                // Only the digits 0-9: \d would also accept full-width and other Unicode digits
+                Regex = new Regex(expression.Replace(@"\d", "[0-9]"), RegexOptions.Compiled, MatchTimeout);
                 IsValid = isValid;
                 RequiredCharacter = requiredCharacter;
             }
@@ -65,21 +69,23 @@ namespace Greenshot.Editor.Helpers
             // Landline with the area code in brackets: (02) 123-4567, 02)123-4567
             new Pattern(NotAfterNumber + @"\(?" + AreaCode + @"\)\s?\d{3,4}" + Separator + @"\d{4}" + NotBeforeNumber),
             // International: +82 10-1234-5678, +82-10-1234-5678, +82 2-123-4567
-            new Pattern(@"(?<![\d+])\+82" + OptionalSeparator + @"\(?0?(?:1[016789]|2|3[1-3]|4[1-4]|5[1-5]|6[1-4]|70)\)?" + OptionalSeparator + @"\d{3,4}" + OptionalSeparator + @"\d{4}(?!\d)"),
+            new Pattern(@"(?<![0-9+])\+82" + OptionalSeparator + @"\(?0?(?:1[016789]|2|3[1-3]|4[1-4]|5[1-5]|6[1-4]|70|50[0-9]?)\)?" + OptionalSeparator + @"\d{3,4}" + OptionalSeparator + @"\d{4}(?!\d)"),
             // E-mail (slow on long text: only when there is an @, and with a time limit)
             new Pattern(@"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}", null, '@'),
             // Resident registration number: 900101-1234567 (the date has to exist; without a separator the check digit has to be right,
             // otherwise a bar code number of 13 digits would be one)
             new Pattern(@"(?<!\d)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])" + ResidentSeparator + @"[1-8]\d{6}(?!\d)", IsResidentNumber),
-            // Card number: 4111-1111-1111-1111, 4111.1111.1111.1111, 4111111111111111. With separators it is not checked (OCR errors a digit,
-            // a missed card is worse than one more box), only years and dates are not cards. Without separators 16 digits are a card
-            // when the check digit and the first digits fit.
-            new Pattern(NotAfterNumber + @"\d{4}" + CardSeparator + @"\d{4}" + CardSeparator + @"\d{4}" + CardSeparator + @"\d{4}(?!\d)", IsCardNumber),
+            // Card number with separators: 4111-1111-1111-1111, 4111.1111.1111.1111. The same separator in every gap, nothing of a longer
+            // number around it, and the first digits of a card. The check digit is not required: OCR errors a digit, and a missed card is worse
+            // than one more box. Numbers like 1920 1080 2560 1440 (a resolution) or dates are not cards: their first digits are not.
+            new Pattern(CardStart + @"\d{4}(?<s>(?:\s?[-.]\s?|\s))\d{4}\k<s>\d{4}\k<s>\d{4}" + NotBeforeNumber, IsSeparatedCard),
+            // Card number without separators: 16 digits, the check digit and the first digits have to fit
+            new Pattern(CardStart + @"\d{16}" + NotBeforeNumber, IsUnseparatedCard),
             // American Express: 3782 822463 10005
-            new Pattern(NotAfterNumber + @"3[47]\d{2}" + CardSeparator + @"\d{6}" + CardSeparator + @"\d{5}(?!\d)", IsAmexNumber),
+            new Pattern(CardStart + @"3[47]\d{2}" + CardSeparator + @"\d{6}" + CardSeparator + @"\d{5}" + NotBeforeNumber, IsAmexNumber),
         };
 
-        private static string DigitsOf(string text) => new string(text.Where(char.IsDigit).ToArray());
+        private static string DigitsOf(string text) => new string(text.Where(character => character >= '0' && character <= '9').ToArray());
 
         /// <summary>
         /// Luhn check of a number
@@ -112,33 +118,32 @@ namespace Greenshot.Editor.Helpers
             return digits.Length > 0 && sum % 10 == 0;
         }
 
-        private static bool IsCardNumber(string text)
+        // Cards start with 3 (Amex, JCB, Diners), 4 (Visa), 5 or 2221-2720 (Mastercard), 6 (Discover, UnionPay) or 9 (Korean local cards)
+        private static bool HasCardPrefix(string digits)
         {
-            string digits = DigitsOf(text);
-            if (digits.Length != 16)
+            if (digits.Length < 4)
             {
                 return false;
             }
 
-            if (text.Length != digits.Length)
-            {
-                // With separators: not a card when two groups look like years ("2023 2024 2025 2026") 
-                int years = Enumerable.Range(0, 4).Count(i => int.Parse(digits.Substring(i * 4, 4), CultureInfo.InvariantCulture) is >= 1900 and <= 2099);
-                return years < 2;
-            }
-
-            if (!IsLuhnValid(digits))
-            {
-                return false;
-            }
-
-            // Cards start with 3 (Amex, JCB, Diners), 4 (Visa), 5 or 2221-2720 (Mastercard), 6 (Discover, UnionPay) or 9 (Korean local cards)
             if ("34569".IndexOf(digits[0]) >= 0)
             {
                 return true;
             }
 
-            return int.Parse(digits.Substring(0, 4), CultureInfo.InvariantCulture) is >= 2221 and <= 2720;
+            return int.TryParse(digits.Substring(0, 4), NumberStyles.None, CultureInfo.InvariantCulture, out int prefix) && prefix >= 2221 && prefix <= 2720;
+        }
+
+        private static bool IsSeparatedCard(string text)
+        {
+            string digits = DigitsOf(text);
+            return digits.Length == 16 && HasCardPrefix(digits);
+        }
+
+        private static bool IsUnseparatedCard(string text)
+        {
+            string digits = DigitsOf(text);
+            return digits.Length == 16 && HasCardPrefix(digits) && IsLuhnValid(digits);
         }
 
         private static bool IsAmexNumber(string text) => IsLuhnValid(DigitsOf(text));
@@ -163,9 +168,9 @@ namespace Greenshot.Editor.Helpers
                 return false;
             }
 
-            int year = century + int.Parse(digits.Substring(0, 2), CultureInfo.InvariantCulture);
-            int month = int.Parse(digits.Substring(2, 2), CultureInfo.InvariantCulture);
-            int day = int.Parse(digits.Substring(4, 2), CultureInfo.InvariantCulture);
+            int year = century + int.Parse(digits.Substring(0, 2), NumberStyles.None, CultureInfo.InvariantCulture);
+            int month = int.Parse(digits.Substring(2, 2), NumberStyles.None, CultureInfo.InvariantCulture);
+            int day = int.Parse(digits.Substring(4, 2), NumberStyles.None, CultureInfo.InvariantCulture);
             if (year > DateTime.Now.Year || day > DateTime.DaysInMonth(year, month))
             {
                 return false;
@@ -188,25 +193,25 @@ namespace Greenshot.Editor.Helpers
         }
 
         /// <summary>
-        /// "02 2024 1120" (month, year, day with spaces) is a date, not a phone number. Only for numbers with a two digit first group
-        /// and spaces only: "02-2072-0505" and "031-2019-1231" are phone numbers.
+        /// "02 2024 1120" (month, year, day with spaces) is a date, not a phone number. Only for numbers with a two digit first group,
+        /// spaces only and a year of the present time (2020-2029): "02 2072 0505", "02 2019 1231" and "02-2072-0505" are phone numbers.
         /// </summary>
         private static bool IsNotASpacedDate(string text)
         {
-            if (text.Any(character => character != ' ' && !char.IsDigit(character)))
+            if (text.Any(character => character != ' ' && (character < '0' || character > '9')))
             {
                 return true;
             }
 
-            var groups = Regex.Matches(text, @"\d+").Cast<Match>().Select(match => match.Value).ToList();
+            var groups = Regex.Matches(text, "[0-9]+").Cast<Match>().Select(match => match.Value).ToList();
             if (groups.Count != 3 || groups[0].Length != 2 || groups[1].Length != 4 || groups[2].Length != 4)
             {
                 return true;
             }
 
-            bool year = groups[1].StartsWith("19", StringComparison.Ordinal) || groups[1].StartsWith("20", StringComparison.Ordinal);
-            int month = int.Parse(groups[2].Substring(0, 2), CultureInfo.InvariantCulture);
-            int day = int.Parse(groups[2].Substring(2, 2), CultureInfo.InvariantCulture);
+            bool year = groups[1].StartsWith("202", StringComparison.Ordinal);
+            int month = int.Parse(groups[2].Substring(0, 2), NumberStyles.None, CultureInfo.InvariantCulture);
+            int day = int.Parse(groups[2].Substring(2, 2), NumberStyles.None, CultureInfo.InvariantCulture);
             return !(year && month >= 1 && month <= 12 && day >= 1 && day <= 31);
         }
 
@@ -225,16 +230,27 @@ namespace Greenshot.Editor.Helpers
                 return FindRangesInChunk(text);
             }
 
+            // The pieces overlap. A match which starts in the first characters of a piece (a number before it is cut off, so the checks
+            // for what stands in front of it are lost) or which reaches the end of a piece (what follows it is cut off) is left to the piece
+            // which has it in the middle.
+            const int StartMargin = 16;
             var all = new HashSet<(int Start, int Length)>();
             for (int start = 0; start < text.Length; start += ChunkLength - ChunkOverlap)
             {
                 int length = Math.Min(ChunkLength, text.Length - start);
+                bool first = start == 0;
+                bool last = start + length >= text.Length;
                 foreach (var (chunkStart, chunkLength) in FindRangesInChunk(text.Substring(start, length)))
                 {
+                    if ((!first && chunkStart < StartMargin) || (!last && chunkStart + chunkLength >= length))
+                    {
+                        continue;
+                    }
+
                     all.Add((start + chunkStart, chunkLength));
                 }
 
-                if (start + length >= text.Length)
+                if (last)
                 {
                     break;
                 }

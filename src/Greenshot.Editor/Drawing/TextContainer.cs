@@ -221,7 +221,9 @@ namespace Greenshot.Editor.Drawing
 
         private void TextContainer_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
-            if (_textBox == null)
+            // 왕캡: the places are reported for the groups (every set, up to 4 times per mouse move), the text box does not follow
+            // them here (it did not before: only "Selected" and "Text" were reported)
+            if (_textBox == null || e.PropertyName is "Left" or "Top" or "Width" or "Height")
             {
                 return;
             }

@@ -133,6 +133,13 @@ namespace Greenshot.Base.Recipes.Sources
                         }
                         return Task.FromResult<ICapturePayload>(payload);
                     }
+                    catch (InvalidDataException ex)
+                    {
+                        // 왕캡: the file has annotations which cannot be read: it is not opened as an image without them (saving would lose them)
+                        Log.Error("The .greenshot file is not valid", ex);
+                        context.Abort($"파일의 개체(그룹)를 읽을 수 없어서 열지 않았어요: {filename}");
+                        return Task.FromResult<ICapturePayload>(null);
+                    }
                     catch (Exception ex)
                     {
                         Log.Error("Couldn't read file contents", ex);

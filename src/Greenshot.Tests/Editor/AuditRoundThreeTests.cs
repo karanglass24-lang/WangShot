@@ -305,5 +305,137 @@ namespace Greenshot.Tests.Editor
 
             Assert.False(group.GetFieldValueAsBool(FieldType.SHADOW));
         }
+
+        private static GroupContainer BoundGroup(Surface surface, out RectangleContainer first, out RectangleContainer second)
+        {
+            first = AddRect(surface, 50, 50);
+            second = AddRect(surface, 150, 150);
+            var group = GroupOf(surface, first, second);
+            var list = new DrawableContainerList();
+            list.Add(group);
+            surface.FieldAggregator.BindElements(list);
+            return group;
+        }
+
+        [Fact]
+        public void FieldChanges_OfDifferentFields_AreSeparateUndoSteps()
+        {
+            using var surface = new Surface(new Bitmap(300, 300));
+            var group = BoundGroup(surface, out var first, out _);
+
+            surface.FieldAggregator.GetField(FieldType.FILL_COLOR).Value = Color.Green;
+            surface.FieldAggregator.GetField(FieldType.LINE_THICKNESS).Value = 7;
+            surface.FieldAggregator.GetField(FieldType.LINE_COLOR).Value = Color.Blue;
+
+            surface.Undo();
+            surface.Undo();
+            surface.Undo();
+            Assert.Single(surface.Elements);
+            Assert.Equal(Color.Red.ToArgb(), first.GetFieldValueAsColor(FieldType.FILL_COLOR).ToArgb());
+            surface.Undo();
+            Assert.Equal(2, surface.Elements.Count);
+            Assert.NotNull(group);
+        }
+
+        [Fact]
+        public void FormatPainter_IsNotMerged_WithAFollowingFieldChange()
+        {
+            using var surface = new Surface(new Bitmap(300, 300));
+            var source = AddRect(surface, 220, 220);
+            source.SetFieldValue(FieldType.FILL_COLOR, Color.Yellow);
+            var group = BoundGroup(surface, out _, out _);
+            surface.DeselectAllElements();
+            surface.SelectElement(source, false, false);
+            surface.CopyFormat();
+            surface.DeselectAllElements();
+            surface.SelectElement(group, false, false);
+
+            surface.PasteFormat();
+            surface.FieldAggregator.GetField(FieldType.FILL_COLOR).Value = Color.Green;
+
+            surface.Undo();
+            surface.Undo();
+            // Both steps are gone, the group is still there
+            Assert.Equal(2, surface.Elements.Count(element => element is GroupContainer || element == source));
+            surface.Undo();
+            Assert.Equal(3, surface.Elements.Count);
+        }
+
+        [Fact]
+        public void FieldChange_WhichNoChildHas_IsNoUndoStep()
+        {
+            using var surface = new Surface(new Bitmap(300, 300));
+            BoundGroup(surface, out var first, out _);
+            Assert.False(first.HasField(FieldType.FONT_SIZE));
+
+            surface.FieldAggregator.GetField(FieldType.FONT_SIZE).Value = 22f;
+
+            surface.Undo();
+            Assert.Equal(2, surface.Elements.Count);
+        }
+
+        [Fact]
+        public void FindRanges_ChunkBorder_DoesNotCutAnIpAddressIntoAPhoneNumber()
+        {
+            string text = new string('a', 4928) + "192.168.010.123 4567" + new string('b', 6000);
+
+            var found = Greenshot.Editor.Helpers.SensitiveInfoMatcher.FindRanges(text).ToList();
+
+            Assert.Empty(found);
+        }
+
+        [Fact]
+        public void WheelTracker_RemembersTheDownSteps()
+        {
+            var wheel = new WheelTracker();
+            wheel.Up(60);
+            wheel.Down(15);
+            wheel.Down(15);
+
+            Assert.Equal(30, wheel.DownUnits);
+        }
+
+        private static byte[] GreenshotFile(Surface surface, bool garbage)
+        {
+            using var stream = new MemoryStream();
+            using (var image = new Bitmap(50, 50))
+            {
+                image.Save(stream, System.Drawing.Imaging.ImageFormat.Png);
+            }
+
+            long written;
+            if (garbage)
+            {
+                var bytes = new byte[200];
+                new Random(1).NextBytes(bytes);
+                stream.Write(bytes, 0, bytes.Length);
+                written = bytes.Length;
+            }
+            else
+            {
+                written = surface.SaveElementsToStream(stream);
+            }
+
+            var writer = new BinaryWriter(stream);
+            writer.Write(written);
+            writer.Write(System.Text.Encoding.ASCII.GetBytes("Greenshot01.00"));
+            writer.Flush();
+            return stream.ToArray();
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void GreenshotFile_WithInvalidElements_IsNotOpened(bool garbage)
+        {
+            using var surface = new Surface(new Bitmap(100, 100));
+            var cyclic = new GroupContainer(surface);
+            cyclic.Children.Add(cyclic);
+            surface.AddElement(cyclic, false, false);
+            var bytes = GreenshotFile(surface, garbage);
+
+            using var stream = new MemoryStream(bytes);
+            Assert.Throws<InvalidDataException>(() => Greenshot.Base.Core.ImageIO.LoadGreenshotSurface(stream, new Surface(new Bitmap(10, 10))));
+        }
     }
 }

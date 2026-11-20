@@ -125,7 +125,16 @@ namespace Greenshot.Capturing
 
         internal void Up(int units) => Net += units;
 
-        internal void Down(int units) => Net -= units;
+        internal void Down(int units)
+        {
+            Net -= units;
+            DownUnits += units;
+        }
+
+        /// <summary>
+        /// The sum of the units turned down
+        /// </summary>
+        internal int DownUnits { get; private set; }
 
         /// <summary>
         /// The units to turn up (positive) or down (negative) to be where the tracking started

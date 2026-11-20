@@ -292,10 +292,12 @@ namespace Greenshot.Capturing
                 wheel.Down(step);
             }
 
-            // Back to where the restore started (the view which did not fit), the caller goes on with a smaller step from there
-            if (wheel.ReturnUnits != 0)
+            // The small down steps are taken back: the view is where the scroll back by one step left it (the last picture when the page
+            // moved by that step), the caller goes on from there with a smaller step. The scroll back itself stays: with the page at its end
+            // it is the view which fits the next try best.
+            if (wheel.DownUnits != 0)
             {
-                mouse_event(0x0800, 0, 0, unchecked((uint)wheel.ReturnUnits), UIntPtr.Zero);
+                mouse_event(0x0800, 0, 0, unchecked((uint)wheel.DownUnits), UIntPtr.Zero);
                 await Task.Delay(300).ConfigureAwait(false);
             }
 
@@ -346,6 +348,12 @@ namespace Greenshot.Capturing
                         }
 
                         using var current = await GrabSettledAsync(rect, retry == 0 ? 350 : 700).ConfigureAwait(false);
+                        // No picture (stopped while waiting) or a stop right after the grab: nothing is added any more
+                        if (current == null || CheckStop())
+                        {
+                            break;
+                        }
+
                         added = stitcher.TryAdd(current);
                         if (added)
                         {
@@ -405,6 +413,19 @@ namespace Greenshot.Capturing
             catch (Exception ex)
             {
                 Log.Warn("Capturing the scrolled page failed", ex);
+                // The pictures which are in the result so far are kept
+                if (stitcher.FrameCount > 0)
+                {
+                    try
+                    {
+                        return (stitcher.Finish(), stitcher.FrameCount, stopped);
+                    }
+                    catch (Exception finishException)
+                    {
+                        Log.Warn("The pictures so far could not be put together", finishException);
+                    }
+                }
+
                 return (null, 0, false);
             }
             finally

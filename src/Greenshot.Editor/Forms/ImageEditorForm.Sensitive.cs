@@ -76,7 +76,18 @@ namespace Greenshot.Editor.Forms
                 return;
             }
 
-            var areas = SensitiveInfoMatcher.FindAreas(ocrLines);
+            List<(Dapplo.Windows.Common.Structs.NativeRect Bounds, int TextHeight)> areas;
+            try
+            {
+                areas = SensitiveInfoMatcher.FindAreas(ocrLines);
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("The search for personal data failed", ex);
+                ShowRibbonStatus(SensitiveTitle + ": 글자를 분석하지 못했어요. 바뀐 곳은 없어요.", isError: true);
+                return;
+            }
+
             if (areas.Count == 0)
             {
                 ShowRibbonStatus(SensitiveTitle + ": 전화번호·이메일·주민등록번호·카드번호로 보이는 글자를 찾지 못했어요. 바뀐 곳은 없어요.");

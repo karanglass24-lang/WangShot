@@ -242,13 +242,19 @@ namespace Greenshot.Editor.Drawing.Fields
                 {
                     // One undo step for the whole group (it was one step per child), the old area is redrawn too (the children invalidate
                     // areas relative to the group only)
+                    var leaves = group.Leaves().Where(leaf => leaf.HasField(field.FieldType)).ToList();
+                    if (leaves.Count == 0)
+                    {
+                        continue;
+                    }
+
                     if (group.IsUndoable)
                     {
-                        group.Parent?.MakeUndoable(new FieldValuesMemento(new[] { group }), true);
+                        group.Parent?.MakeUndoable(new FieldValuesMemento(new[] { group }, field.FieldType), true);
                     }
 
                     group.Invalidate();
-                    foreach (var leaf in group.Leaves())
+                    foreach (var leaf in leaves)
                     {
                         ApplyField(leaf, field, false);
                     }

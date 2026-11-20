@@ -1470,6 +1470,11 @@ namespace Greenshot.Editor.Drawing
             catch (Exception e)
             {
                 LOG.Error("Error serializing elements from stream.", e);
+                if (untrusted)
+                {
+                    // 왕캡: a file which cannot be read is not opened as if it had no annotations (saving would lose them)
+                    throw new InvalidDataException("The elements of the file could not be read.", e);
+                }
             }
         }
 

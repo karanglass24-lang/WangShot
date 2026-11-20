@@ -704,7 +704,16 @@ namespace Greenshot.Base.Core
                 using BinaryReader reader = new BinaryReader(surfaceFileStream);
                 long bytesWritten = reader.ReadInt64();
                 surfaceFileStream.Seek(-(bytesWritten + filesizeLocation), SeekOrigin.End);
-                returnSurface.LoadElementsFromStream(surfaceFileStream);
+                try
+                {
+                    returnSurface.LoadElementsFromStream(surfaceFileStream);
+                }
+                catch (InvalidDataException)
+                {
+                    // 왕캡: nothing is opened, the copy of the image is released
+                    fileImage?.Dispose();
+                    throw;
+                }
             }
 
             if (fileImage != null)
