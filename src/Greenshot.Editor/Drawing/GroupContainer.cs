@@ -58,6 +58,15 @@ namespace Greenshot.Editor.Drawing
         private const int MaximumNodes = 10000;
 
         private bool _updatingChildren = false;
+
+        /// <summary>
+        /// 왕캡: while true, changes of the places of the children do not change the box of the group (a restore sets all places)
+        /// </summary>
+        internal bool BoundsUpdatesSuspended
+        {
+            get => _updatingChildren;
+            set => _updatingChildren = value;
+        }
         // 왕캡: not serialized (the clipboard and .greenshot files only allow known types)
         [NonSerialized] private NativeRect _lastChildrenBounds = NativeRect.Empty;
         [NonSerialized] private bool _switchingParent;
@@ -147,10 +156,12 @@ namespace Greenshot.Editor.Drawing
                 return false;
             }
 
+            // Every element may be in the tree only once: a child which two groups share (or which is in the list twice) is not a tree
+            var seen = new HashSet<object>(ReferenceComparer.Instance);
             foreach (var element in elements)
             {
                 int nodes = 0;
-                if (!IsValidNode(element, new HashSet<object>(ReferenceComparer.Instance), 0, ref nodes))
+                if (!IsValidNode(element, seen, 0, ref nodes))
                 {
                     return false;
                 }
@@ -179,32 +190,31 @@ namespace Greenshot.Editor.Drawing
                 return false;
             }
 
+            // Also catches a circle: the group is in its own subtree
             if (!path.Add(container))
             {
                 return false;
             }
 
-            try
+            if (container is GroupContainer && container.Children.Count > MaximumNodes)
             {
-                foreach (var child in container.Children)
+                return false;
+            }
+
+            foreach (var child in container.Children)
+            {
+                if (container is GroupContainer)
                 {
-                    if (container is GroupContainer)
+                    if (child is not IDrawableContainer drawable || !CanBeChild(drawable) || !IsValidNode(child, path, depth + 1, ref nodes))
                     {
-                        if (child is not IDrawableContainer drawable || !CanBeChild(drawable) || !IsValidNode(child, path, depth + 1, ref nodes))
-                        {
-                            return false;
-                        }
-                    }
-                    else if (child is IDrawableContainer)
-                    {
-                        // Other elements only have filters as children
                         return false;
                     }
                 }
-            }
-            finally
-            {
-                path.Remove(container);
+                else if (child is IDrawableContainer)
+                {
+                    // Other elements only have filters as children
+                    return false;
+                }
             }
 
             return true;
@@ -299,6 +309,20 @@ namespace Greenshot.Editor.Drawing
                 return;
             }
 
+            bool wasUpdating = _updatingChildren;
+            _updatingChildren = true;
+            try
+            {
+                UpdateBoundsFromChildrenCore();
+            }
+            finally
+            {
+                _updatingChildren = wasUpdating;
+            }
+        }
+
+        private void UpdateBoundsFromChildrenCore()
+        {
             var bounds = NativeRect.Empty;
             foreach (var child in Children.OfType<IDrawableContainer>())
             {
@@ -330,6 +354,20 @@ namespace Greenshot.Editor.Drawing
         /// offset of the box of its children and the children move back by it, so nothing moves on the surface.
         /// </summary>
         private void RecomputeLocalBounds()
+        {
+            bool wasUpdating = _updatingChildren;
+            _updatingChildren = true;
+            try
+            {
+                RecomputeLocalBoundsCore();
+            }
+            finally
+            {
+                _updatingChildren = wasUpdating;
+            }
+        }
+
+        private void RecomputeLocalBoundsCore()
         {
             var bounds = NativeRect.Empty;
             foreach (var child in Children.OfType<IDrawableContainer>())
@@ -415,6 +453,23 @@ namespace Greenshot.Editor.Drawing
                 }
 
                 return new NativeRect(bounds.Left + Left, bounds.Top + Top, bounds.Width, bounds.Height);
+            }
+        }
+
+        [NonSerialized] private NativeRect _lastDrawingBounds = NativeRect.Empty;
+
+        /// <summary>
+        /// 왕캡: the area of the group before and after a change is redrawn: the group is smaller after a child shrank or moved
+        /// and the old area would keep the old picture
+        /// </summary>
+        public override void Invalidate()
+        {
+            var current = DrawingBounds;
+            var area = _lastDrawingBounds.IsEmpty ? current : current.Union(_lastDrawingBounds);
+            _lastDrawingBounds = current;
+            if (Status != EditStatus.UNDRAWN)
+            {
+                _parent?.InvalidateElements(area);
             }
         }
 

@@ -1435,11 +1435,17 @@ namespace Greenshot.Editor.Drawing
         {
             try
             {
+                // 왕캡: cheap limits before anything is built: the size of the data (same limit as for the clipboard)
+                if (untrusted && streamRead.CanSeek && streamRead.Length - streamRead.Position > DrawableContainerClipboard.MaxSize)
+                {
+                    throw new InvalidDataException("The elements of the file are too large.");
+                }
+
                 BinaryFormatter binaryRead = new BinaryFormatter();
                 binaryRead.Binder = new BinaryFormatterHelper();
                 IDrawableContainerList loadedElements = (IDrawableContainerList) binaryRead.Deserialize(streamRead);
                 // 왕캡: a group which contains itself, is nested too deep or has elements which cannot be grouped would crash the drawing
-                if (untrusted && !GroupContainer.IsValidTree(loadedElements))
+                if (untrusted && (loadedElements.Count > 100000 || !GroupContainer.IsValidTree(loadedElements)))
                 {
                     throw new InvalidDataException("The elements of the file are not valid (groups).");
                 }

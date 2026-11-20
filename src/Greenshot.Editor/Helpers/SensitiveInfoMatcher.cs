@@ -32,8 +32,10 @@ namespace Greenshot.Editor.Helpers
 
         private static readonly TimeSpan MatchTimeout = TimeSpan.FromMilliseconds(500);
 
-        // Longer lines are not OCR lines of a screenshot, they would only cost time
-        private const int MaximumTextLength = 20000;
+        // Longer text is searched in pieces (a pattern which is slow on long text, e.g. the e-mail, would cost too much time),
+        // the pieces overlap so that a number at the border is still found
+        private const int ChunkLength = 5000;
+        private const int ChunkOverlap = 64;
 
         private sealed class Pattern
         {
@@ -213,11 +215,36 @@ namespace Greenshot.Editor.Helpers
         /// </summary>
         public static IEnumerable<(int Start, int Length)> FindRanges(string text)
         {
-            if (string.IsNullOrEmpty(text) || text.Length > MaximumTextLength)
+            if (string.IsNullOrEmpty(text))
             {
                 return Enumerable.Empty<(int Start, int Length)>();
             }
 
+            if (text.Length <= ChunkLength)
+            {
+                return FindRangesInChunk(text);
+            }
+
+            var all = new HashSet<(int Start, int Length)>();
+            for (int start = 0; start < text.Length; start += ChunkLength - ChunkOverlap)
+            {
+                int length = Math.Min(ChunkLength, text.Length - start);
+                foreach (var (chunkStart, chunkLength) in FindRangesInChunk(text.Substring(start, length)))
+                {
+                    all.Add((start + chunkStart, chunkLength));
+                }
+
+                if (start + length >= text.Length)
+                {
+                    break;
+                }
+            }
+
+            return all.OrderBy(range => range.Start).ToList();
+        }
+
+        private static List<(int Start, int Length)> FindRangesInChunk(string text)
+        {
             var ranges = new List<(int Start, int Length)>();
             foreach (var pattern in Patterns)
             {

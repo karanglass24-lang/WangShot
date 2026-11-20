@@ -27,6 +27,7 @@ using Dapplo.Ini;
 using Greenshot.Base.Interfaces;
 using Greenshot.Base.Interfaces.Drawing;
 using Greenshot.Editor.Configuration;
+using Greenshot.Editor.Memento;
 
 namespace Greenshot.Editor.Drawing.Fields
 {
@@ -239,11 +240,20 @@ namespace Greenshot.Editor.Drawing.Fields
                 // 왕캡: a group gives the change to all of its elements (GetField finds the first child only)
                 if (drawableContainer is GroupContainer group)
                 {
-                    foreach (var leaf in group.Leaves())
+                    // One undo step for the whole group (it was one step per child), the old area is redrawn too (the children invalidate
+                    // areas relative to the group only)
+                    if (group.IsUndoable)
                     {
-                        ApplyField(leaf, field);
+                        group.Parent?.MakeUndoable(new FieldValuesMemento(new[] { group }), true);
                     }
 
+                    group.Invalidate();
+                    foreach (var leaf in group.Leaves())
+                    {
+                        ApplyField(leaf, field, false);
+                    }
+
+                    group.Invalidate();
                     continue;
                 }
 
@@ -251,7 +261,7 @@ namespace Greenshot.Editor.Drawing.Fields
             }
         }
 
-        private static void ApplyField(DrawableContainer drawableContainer, IField field)
+        private static void ApplyField(DrawableContainer drawableContainer, IField field, bool notify = true)
         {
             if (!drawableContainer.HasField(field.FieldType))
             {
@@ -260,7 +270,10 @@ namespace Greenshot.Editor.Drawing.Fields
 
             IField drawableContainerField = drawableContainer.GetField(field.FieldType);
             // Notify before change, so we can e.g. invalidate the area
-            drawableContainer.BeforeFieldChange(drawableContainerField, field.Value);
+            if (notify)
+            {
+                drawableContainer.BeforeFieldChange(drawableContainerField, field.Value);
+            }
 
             drawableContainerField.Value = field.Value;
             // update last used from DC field, so that scope is honored

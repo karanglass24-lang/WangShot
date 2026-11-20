@@ -207,6 +207,7 @@ namespace Greenshot.Editor.Drawing
                 }
 
                 left = value;
+                _propertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Left)));
             }
         }
 
@@ -223,6 +224,7 @@ namespace Greenshot.Editor.Drawing
                 }
 
                 top = value;
+                _propertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Top)));
             }
         }
 
@@ -239,6 +241,7 @@ namespace Greenshot.Editor.Drawing
                 }
 
                 width = value;
+                _propertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Width)));
             }
         }
 
@@ -255,6 +258,7 @@ namespace Greenshot.Editor.Drawing
                 }
 
                 height = value;
+                _propertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Height)));
             }
         }
 

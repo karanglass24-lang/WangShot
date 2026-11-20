@@ -45,6 +45,28 @@ namespace Greenshot.Editor.Memento
 
         internal void Apply()
         {
+            // The groups keep their boxes while the places of the children are set one after the other
+            var groups = _places.Select(place => place.Element).OfType<GroupContainer>().Where(group => !group.BoundsUpdatesSuspended).ToList();
+            foreach (var group in groups)
+            {
+                group.BoundsUpdatesSuspended = true;
+            }
+
+            try
+            {
+                ApplyPlaces();
+            }
+            finally
+            {
+                foreach (var group in groups)
+                {
+                    group.BoundsUpdatesSuspended = false;
+                }
+            }
+        }
+
+        private void ApplyPlaces()
+        {
             foreach (var (element, left, top, width, height, line) in _places)
             {
                 element.Invalidate();
@@ -107,7 +129,7 @@ namespace Greenshot.Editor.Memento
         /// <summary>
         /// The element, or all elements of a group (also in groups in the group): GetFields of a group reaches one level only
         /// </summary>
-        private static IEnumerable<DrawableContainer> Targets(DrawableContainer element) => element is GroupContainer group ? group.Leaves() : new[] { element };
+        private static IEnumerable<DrawableContainer> Targets(DrawableContainer element) => element is GroupContainer group ? group.Leaves().Prepend(group) : new[] { element };
 
         private FieldValuesMemento(List<(DrawableContainer Element, IField Field, object Value)> values)
         {
@@ -127,7 +149,13 @@ namespace Greenshot.Editor.Memento
             return inverse;
         }
 
-        public bool Merge(IMemento otherMemento) => false;
+        /// <summary>
+        /// A change of the same fields right after this one (e.g. a color which is dragged in a color picker) is the same undo step
+        /// </summary>
+        public bool Merge(IMemento otherMemento) =>
+            otherMemento is FieldValuesMemento other
+            && other._values.Count == _values.Count
+            && other._values.Zip(_values, (a, b) => ReferenceEquals(a.Field, b.Field)).All(same => same);
 
         public void Dispose()
         {

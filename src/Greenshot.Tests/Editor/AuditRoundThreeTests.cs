@@ -225,5 +225,85 @@ namespace Greenshot.Tests.Editor
             wheel.Down(20);
             Assert.Equal(0, wheel.ReturnUnits);
         }
+
+        [Fact]
+        public void FieldChange_OfAGroup_IsOneUndoStep()
+        {
+            using var surface = new Surface(new Bitmap(300, 300));
+            var first = AddRect(surface, 50, 50);
+            var second = AddRect(surface, 150, 150);
+            var group = GroupOf(surface, first, second);
+            var list = new DrawableContainerList();
+            list.Add(group);
+            surface.FieldAggregator.BindElements(list);
+
+            surface.FieldAggregator.GetField(FieldType.FILL_COLOR).Value = Color.Green;
+            surface.FieldAggregator.GetField(FieldType.FILL_COLOR).Value = Color.Blue;
+            Assert.Equal(Color.Blue.ToArgb(), second.GetFieldValueAsColor(FieldType.FILL_COLOR).ToArgb());
+
+            surface.Undo();
+            Assert.Equal(Color.Red.ToArgb(), first.GetFieldValueAsColor(FieldType.FILL_COLOR).ToArgb());
+            Assert.Equal(Color.Red.ToArgb(), second.GetFieldValueAsColor(FieldType.FILL_COLOR).ToArgb());
+            // The next undo is the grouping, not another color
+            Assert.Single(surface.Elements);
+        }
+
+        [Fact]
+        public void IsValidTree_RejectsAChildWhichTwoGroupsShare()
+        {
+            using var surface = new Surface(new Bitmap(100, 100));
+            var shared = AddRect(surface, 10, 10);
+            var first = new GroupContainer(surface);
+            var second = new GroupContainer(surface);
+            first.AddChildToGroup(shared);
+            second.AddChildToGroup(shared);
+
+            Assert.False(GroupContainer.IsValidTree(new IDrawableContainer[] { first, second }));
+            Assert.True(GroupContainer.IsValidTree(new IDrawableContainer[] { first }));
+        }
+
+        [Fact]
+        public void FindRanges_LongText_IsSearchedInChunks_AndFindsTheNumberOnTheBorder()
+        {
+            string text = new string('a', 4990) + " 010-1234-5678 " + new string('b', 20000) + " hong@example.com";
+
+            var found = Greenshot.Editor.Helpers.SensitiveInfoMatcher.FindRanges(text).Select(range => text.Substring(range.Start, range.Length)).ToList();
+
+            Assert.Single(found, "010-1234-5678");
+            Assert.Contains("hong@example.com", found);
+        }
+
+        [Fact]
+        public void ChildMoved_UpdatesTheBoxOfTheGroup()
+        {
+            using var surface = new Surface(new Bitmap(300, 300));
+            var first = AddRect(surface, 50, 50);
+            var second = AddRect(surface, 150, 150);
+            var group = GroupOf(surface, first, second);
+
+            second.Left = 200;
+            Assert.Equal(240, group.Width);
+
+            first.Left = -10;
+            Assert.Equal(40, group.Left);
+            Assert.Equal(0, first.Left);
+            Assert.Equal(50, group.Left + first.Left + 10);
+        }
+
+        [Fact]
+        public void FormatUndo_AlsoRestoresTheOwnFieldsOfAGroup()
+        {
+            using var surface = new Surface(new Bitmap(300, 300));
+            var first = AddRect(surface, 50, 50);
+            var second = AddRect(surface, 150, 150);
+            var group = GroupOf(surface, first, second);
+            group.SetFieldValue(FieldType.SHADOW, false);
+            var memento = new Greenshot.Editor.Memento.FieldValuesMemento(new[] { group });
+
+            group.SetFieldValue(FieldType.SHADOW, true);
+            memento.Restore();
+
+            Assert.False(group.GetFieldValueAsBool(FieldType.SHADOW));
+        }
     }
 }
