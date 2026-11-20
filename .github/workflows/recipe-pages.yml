@@ -24,13 +24,13 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Check out the website
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: gh-pages
           path: site
 
       - name: Check out the website tools
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           sparse-checkout: tools/website
           path: greenshot

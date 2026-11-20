@@ -28,7 +28,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         # Nerdbank.GitVersioning 이 git 이력을 필요로 해요 — full history(샤 shallow 면 --unshallow).
         with:
           fetch-depth: 0

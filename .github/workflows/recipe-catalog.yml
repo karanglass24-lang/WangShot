@@ -19,14 +19,14 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Check out this PR's schema
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           sparse-checkout: docs/vNext/recipe.schema.json
           sparse-checkout-cone-mode: false
           path: greenshot
 
       - name: Check out the recipe catalog
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: greenshot/greenshot-recipes
           path: greenshot-recipes
