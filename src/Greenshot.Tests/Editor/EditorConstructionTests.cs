@@ -55,6 +55,25 @@ namespace Greenshot.Tests.Editor
                     Assert.Equal("전체 화면 종료", fullscreenButton.Text);
                     toggleFullscreen.Invoke(editor, null);
                     Assert.Equal("전체 화면", fullscreenButton.Text);
+                    // 왕캡: the names under the icons are short, the shortcut keys are in the tool tips
+                    Assert.DoesNotContain(strips.SelectMany(strip => strip.Items.Cast<ToolStripItem>()), item => item.Text != null && item.Text.Contains("(Ctrl"));
+                    Assert.True(editor.MinimumSize.Width <= Screen.FromControl(editor).WorkingArea.Width);
+                    // 왕캡: KeyTips in two levels - first the tabs, then the groups of the chosen tab with their own letters
+                    var ribbonType = ribbon.GetType();
+                    var keyTipMap = (System.Collections.IDictionary)ribbonType.GetField("_keyTipMap", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(ribbon);
+                    ribbonType.GetMethod("SetKeyTipMode").Invoke(ribbon, new object[] { true });
+                    Assert.True(keyTipMap.Contains("A"));
+                    Assert.True(keyTipMap.Contains("H"));
+                    Assert.True((bool)ribbonType.GetMethod("HandleKeyTipKey", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(ribbon, new object[] { Keys.A }));
+                    Assert.True((bool)ribbonType.GetProperty("KeyTipMode").GetValue(ribbon));
+                    foreach (var letter in new[] { "T", "H", "Q", "S" })
+                    {
+                        Assert.True(keyTipMap.Contains(letter), "The annotation tab has no group with the KeyTip " + letter);
+                    }
+
+                    Assert.True((bool)ribbonType.GetMethod("HandleKeyTipKey", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(ribbon, new object[] { Keys.Escape }));
+                    Assert.True((bool)ribbonType.GetMethod("HandleKeyTipKey", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(ribbon, new object[] { Keys.Escape }));
+                    Assert.False((bool)ribbonType.GetProperty("KeyTipMode").GetValue(ribbon));
                     // Selecting the text tool binds an integer line thickness to the format tab.
                     surface.DrawingMode = DrawingModes.Text;
                     Assert.Equal(DrawingModes.Text, surface.DrawingMode);

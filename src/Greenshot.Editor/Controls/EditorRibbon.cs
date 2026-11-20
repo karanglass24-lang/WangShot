@@ -151,6 +151,58 @@ namespace Greenshot.Editor.Controls
     /// </summary>
     internal sealed class EditorRibbon : Panel
     {
+        /// <summary>
+        /// 왕캡: an arrow on the left or right edge of a narrow ribbon: it shows that there are more groups, a click moves them
+        /// </summary>
+        private sealed class ScrollArrow : Control
+        {
+            private readonly bool _left;
+            private bool _hot;
+
+            public ScrollArrow(bool left)
+            {
+                _left = left;
+                SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+                SetStyle(ControlStyles.Selectable, false);
+                Cursor = Cursors.Hand;
+                Dock = left ? DockStyle.Left : DockStyle.Right;
+                Visible = false;
+                TabStop = false;
+            }
+
+            protected override void OnMouseEnter(EventArgs e)
+            {
+                base.OnMouseEnter(e);
+                _hot = true;
+                Invalidate();
+            }
+
+            protected override void OnMouseLeave(EventArgs e)
+            {
+                base.OnMouseLeave(e);
+                _hot = false;
+                Invalidate();
+            }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                var theme = EditorTheme.Current;
+                e.Graphics.Clear(_hot ? theme.HotTab : theme.Window);
+                using var border = new Pen(theme.Border);
+                int edge = _left ? Width - 1 : 0;
+                e.Graphics.DrawLine(border, edge, 0, edge, Height);
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                using var pen = new Pen(theme.WindowText, Math.Max(1.5f, DeviceDpi / 64f));
+                int cx = Width / 2;
+                int cy = Height / 2;
+                int d = Math.Max(3, DeviceDpi * 4 / 96);
+                var points = _left
+                    ? new[] { new Point(cx + d / 2, cy - d), new Point(cx - d / 2, cy), new Point(cx + d / 2, cy + d) }
+                    : new[] { new Point(cx - d / 2, cy - d), new Point(cx + d / 2, cy), new Point(cx - d / 2, cy + d) };
+                e.Graphics.DrawLines(pen, points);
+            }
+        }
+
         private sealed class RibbonTab
         {
             public string Title;
@@ -159,6 +211,8 @@ namespace Greenshot.Editor.Controls
             public Rectangle Bounds;
             public bool Visible = true; // 컨텍스트 탭 표시/숨김용
             public string KeyTip; // 왕캡: KeyTip 문자열 (예: "H" for Home)
+            public ScrollArrow ScrollLeft;
+            public ScrollArrow ScrollRight;
         }
 
         private sealed class RibbonGroup
@@ -185,6 +239,8 @@ namespace Greenshot.Editor.Controls
 
         // 왕샷: KeyTip 관련 필드
         private bool _keyTipMode;
+        private bool _keyTipGroupLevel;
+        private bool _altPending;
         private readonly Dictionary<string, (string Type, int Index)> _keyTipMap = new(); // KeyTip 문자열 -> (타입, 인덱스)
         private readonly HashSet<string> _usedKeyTips = new(); // 이미 사용된 KeyTip 문자들
 
@@ -261,10 +317,26 @@ namespace Greenshot.Editor.Controls
                 Padding = new Padding(Scale(4), Scale(2), 0, 0)
             };
             viewport.Controls.Add(body);
+            // 왕캡: arrows on the edges when the groups do not fit (a narrow window or a high DPI)
+            var tab = new RibbonTab { Title = title, Body = body, IsFile = isFile, ScrollLeft = new ScrollArrow(true), ScrollRight = new ScrollArrow(false) };
+            foreach (var arrow in new[] { tab.ScrollLeft, tab.ScrollRight })
+            {
+                arrow.Width = Scale(18);
+                arrow.MouseDown += (s, e) =>
+                {
+                    if (e.Button == MouseButtons.Left)
+                    {
+                        ScrollBody(body, ReferenceEquals(s, tab.ScrollLeft) ? Math.Max(Scale(120), viewport.ClientSize.Width / 2) : -Math.Max(Scale(120), viewport.ClientSize.Width / 2));
+                    }
+                };
+                viewport.Controls.Add(arrow);
+                arrow.BringToFront();
+            }
+
             viewport.Resize += (s, e) => ClampScroll(body);
             body.SizeChanged += (s, e) => ClampScroll(body);
             Controls.Add(viewport);
-            _tabs.Add(new RibbonTab { Title = title, Body = body, IsFile = isFile });
+            _tabs.Add(tab);
             Padding = new Padding(Scale(8), HeaderHeight + Scale(2), Scale(8), Scale(8));
             _headerRight.BringToFront();
             _quickAccess.BringToFront();
@@ -345,20 +417,30 @@ namespace Greenshot.Editor.Controls
         {
             if (_keyTipMode == enabled) return;
             _keyTipMode = enabled;
+            // 왕캡: Office처럼 두 단계 - 먼저 탭 글자, 탭을 고르면 그 탭의 그룹 글자
+            _keyTipGroupLevel = false;
             if (enabled)
             {
                 BuildKeyTipMap();
+                ShowKeyTipBadges();
             }
             else
             {
                 _keyTipMap.Clear();
                 _usedKeyTips.Clear();
+                ClearKeyTipBadges();
             }
             Invalidate();
         }
 
         /// <summary>
-        /// 왕샷: KeyTip 맵 구성 (탭, 그룹, 버튼에 문자 할당)
+        /// 왕캡: KeyTip 모드가 켜져 있는지 (테스트와 폼에서 확인용)
+        /// </summary>
+        public bool KeyTipMode => _keyTipMode;
+
+        /// <summary>
+        /// 왕샷: KeyTip 맵 구성. 첫 단계는 탭만, 탭을 고른 뒤에는 그 탭의 그룹만 글자를 받는다
+        /// (탭 글자와 그룹 글자가 겹쳐도 서로 가리지 않는다).
         /// </summary>
         private void BuildKeyTipMap()
         {
@@ -366,7 +448,7 @@ namespace Greenshot.Editor.Controls
             _usedKeyTips.Clear();
 
             // 탭 KeyTip 할당
-            for (int i = 0; i < _tabs.Count; i++)
+            for (int i = 0; i < _tabs.Count && !_keyTipGroupLevel; i++)
             {
                 if (!_tabs[i].Visible) continue;
                 string kt = _tabs[i].KeyTip ?? AutoAssignKeyTip(_tabs[i].Title);
@@ -375,14 +457,21 @@ namespace Greenshot.Editor.Controls
             }
 
             // 현재 선택된 탭의 그룹 KeyTip 할당
-            if (_selected >= 0 && _selected < _tabs.Count)
+            if (_keyTipGroupLevel && _selected >= 0 && _selected < _tabs.Count)
             {
                 var tab = _tabs[_selected];
                 int groupIdx = 0;
                 foreach (var control in tab.Body.Controls)
                 {
-                    if (control is Panel panel && _stripGroups.ContainsKey(panel))
+                    if (control is Panel panel && _stripGroups.TryGetValue(panel, out var groupParts))
                     {
+                        if (!groupParts.Strip.Items.Cast<ToolStripItem>().Any(i => i.Available))
+                        {
+                            // An empty group is hidden, it gets no letter
+                            groupIdx++;
+                            continue;
+                        }
+
                         // _ribbonGroups에서 찾기
                         foreach (var rg in _ribbonGroups)
                         {
@@ -437,8 +526,10 @@ namespace Greenshot.Editor.Controls
         /// <returns>The tool strip of the group: more items can be added to it later</returns>
         public ToolStrip AddGroup(int tabIndex, string caption)
         {
-            var strip = new ToolStrip
+            // 왕캡: ToolStripEx - the keyboard can go into the group (KeyTips, F6), and a click works also while the editor is not active
+            var strip = new ToolStripEx
             {
+                ClickThrough = true,
                 GripStyle = ToolStripGripStyle.Hidden,
                 CanOverflow = false,
                 AutoSize = true,
@@ -687,7 +778,7 @@ namespace Greenshot.Editor.Controls
             PlaceHeaderStrips();
         }
 
-        private static void ClampScroll(FlowLayoutPanel body)
+        private void ClampScroll(FlowLayoutPanel body)
         {
             int min = Math.Min(0, body.Parent.ClientSize.Width - body.Width);
             int left = Math.Max(min, Math.Min(0, body.Left));
@@ -695,6 +786,32 @@ namespace Greenshot.Editor.Controls
             {
                 body.Left = left;
             }
+
+            // 왕캡: the arrows show where more groups are
+            var tab = _tabs.FirstOrDefault(t => ReferenceEquals(t.Body, body));
+            if (tab?.ScrollLeft != null)
+            {
+                bool showLeft = left < 0;
+                bool showRight = left > min;
+                if (tab.ScrollLeft.Visible != showLeft)
+                {
+                    tab.ScrollLeft.Visible = showLeft;
+                }
+
+                if (tab.ScrollRight.Visible != showRight)
+                {
+                    tab.ScrollRight.Visible = showRight;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 왕캡: move the groups of a tab by the given pixels (positive: to the right, the groups on the left come into view)
+        /// </summary>
+        private void ScrollBody(FlowLayoutPanel body, int delta)
+        {
+            body.Left += delta;
+            ClampScroll(body);
         }
 
         private sealed class WheelFilter : IMessageFilter
@@ -705,6 +822,17 @@ namespace Greenshot.Editor.Controls
 
             public bool PreFilterMessage(ref Message m)
             {
+                if (_owner.IsDisposed)
+                {
+                    return false;
+                }
+
+                // 왕캡: Alt and the letters of the KeyTips
+                if (_owner.PreFilterKeyTipMessage(ref m))
+                {
+                    return true;
+                }
+
                 // WM_MOUSEWHEEL, WM_MOUSEHWHEEL
                 if ((m.Msg != 0x020A && m.Msg != 0x020E) || _owner.IsDisposed || !_owner.Visible || _owner._collapsed)
                 {
@@ -723,8 +851,7 @@ namespace Greenshot.Editor.Controls
                 }
 
                 int delta = (short)(((long)m.WParam >> 16) & 0xFFFF);
-                body.Left += delta > 0 ? _owner.Scale(60) : -_owner.Scale(60);
-                ClampScroll(body);
+                _owner.ScrollBody(body, delta > 0 ? _owner.Scale(60) : -_owner.Scale(60));
                 return true;
             }
         }
@@ -952,98 +1079,9 @@ namespace Greenshot.Editor.Controls
                 graphics.DrawLines(chevronPen, new[] { new Point(cx - 4, cy + 2), new Point(cx, cy - 2), new Point(cx + 4, cy + 2) });
             }
 
-            // 왕샷: KeyTip 배지 그리기
-            if (_keyTipMode)
-            {
-                DrawKeyTips(graphics, theme);
-            }
-        }
-
-        /// <summary>
-        /// 왕샷: KeyTip 배지 렌더링
-        /// </summary>
-        private void DrawKeyTips(Graphics graphics, EditorTheme theme)
-        {
-            using var keyTipFont = new Font(Font.FontFamily, Font.Size - 1f, FontStyle.Bold);
-            using var keyTipBrush = new SolidBrush(theme.Highlight);
-            using var keyTipBackBrush = new SolidBrush(Color.FromArgb(220, theme.Background.R, theme.Background.G, theme.Background.B));
-            using var keyTipBorderPen = new Pen(theme.Highlight, 1.5f);
-
-            // 탭 KeyTips
-            for (int i = 0; i < _tabs.Count; i++)
-            {
-                var tab = _tabs[i];
-                if (!tab.Visible || string.IsNullOrEmpty(tab.KeyTip)) continue;
-
-                var bounds = tab.Bounds;
-                int badgeWidth = Scale(24);
-                int badgeHeight = Scale(18);
-                int x = bounds.Left + (bounds.Width - badgeWidth) / 2;
-                int y = bounds.Bottom + Scale(2);
-
-                var badgeRect = new Rectangle(x, y, badgeWidth, badgeHeight);
-                using var path = Rounded(badgeRect, Scale(3));
-                graphics.FillPath(keyTipBackBrush, path);
-                graphics.DrawPath(keyTipBorderPen, path);
-
-                TextRenderer.DrawText(graphics, tab.KeyTip, keyTipFont, badgeRect, theme.Highlight,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
-            }
-
-            // 현재 탭의 그룹 KeyTips
-            if (_selected >= 0 && _selected < _tabs.Count && !_collapsed)
-            {
-                var tab = _tabs[_selected];
-                foreach (var control in tab.Body.Controls)
-                {
-                    if (control is Panel panel && _stripGroups.ContainsKey(panel))
-                    {
-                        var label = panel.Controls.OfType<Label>().FirstOrDefault();
-                        string keyTip = null;
-                        foreach (var rg in _ribbonGroups)
-                        {
-                            if (rg.Panel == panel)
-                            {
-                                int index = _ribbonGroups.IndexOf(rg);
-                                keyTip = _keyTipMap.FirstOrDefault(entry => entry.Value.Type == "Group" && entry.Value.Index == index).Key;
-                                break;
-                            }
-                        }
-                        if (string.IsNullOrEmpty(keyTip)) continue;
-
-                        int badgeWidth = Scale(24);
-                        int badgeHeight = Scale(18);
-                        int x = panel.Left + (panel.Width - badgeWidth) / 2;
-                        int y = panel.Top + Scale(2);
-
-                        var badgeRect = new Rectangle(x, y, badgeWidth, badgeHeight);
-                        using var path = Rounded(badgeRect, Scale(3));
-                        graphics.FillPath(keyTipBackBrush, path);
-                        graphics.DrawPath(keyTipBorderPen, path);
-
-                        TextRenderer.DrawText(graphics, keyTip, keyTipFont, badgeRect, theme.Highlight,
-                            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
-                    }
-                }
-            }
         }
 
         private static GraphicsPath RoundedCard(Rectangle bounds, int radius)
-        {
-            var path = new GraphicsPath();
-            int d = radius * 2;
-            path.AddArc(bounds.Left, bounds.Top, d, d, 180, 90);
-            path.AddArc(bounds.Right - d, bounds.Top, d, d, 270, 90);
-            path.AddArc(bounds.Right - d, bounds.Bottom - d, d, d, 0, 90);
-            path.AddArc(bounds.Left, bounds.Bottom - d, d, d, 90, 90);
-            path.CloseFigure();
-            return path;
-        }
-
-        /// <summary>
-        /// 왕샷: 작은 배지용 둥근 사각형 (KeyTip용)
-        /// </summary>
-        private static GraphicsPath Rounded(Rectangle bounds, int radius)
         {
             var path = new GraphicsPath();
             int d = radius * 2;
@@ -1098,87 +1136,295 @@ namespace Greenshot.Editor.Controls
             }
         }
 
-        protected override void OnKeyDown(KeyEventArgs e)
+        // ============================================================
+        // 왕캡: KeyTips - 왼쪽 Alt를 눌렀다 떼면 탭 글자가 뜨고, 탭 글자를 누르면 그 탭의 그룹 글자가 뜬다.
+        // 그룹 글자를 누르면 그 그룹의 첫 버튼으로 키보드 포커스가 간다 (화살표로 이동, Enter/Space로 실행, 아래 화살표로 더 보기).
+        // Esc는 한 단계 뒤로, 마우스를 누르거나 창을 떠나면 끝난다.
+        // ============================================================
+        private const int WM_KEYDOWN = 0x0100;
+        private const int WM_SYSKEYDOWN = 0x0104;
+        private const int WM_SYSKEYUP = 0x0105;
+        private const int WM_LBUTTONDOWN = 0x0201;
+        private const int WM_RBUTTONDOWN = 0x0204;
+        private const int WM_MBUTTONDOWN = 0x0207;
+        private const int WM_NCLBUTTONDOWN = 0x00A1;
+
+        [System.Runtime.InteropServices.DllImport("imm32.dll")]
+        private static extern int ImmGetVirtualKey(IntPtr hWnd);
+
+        private readonly List<Label> _keyTipBadges = new();
+
+        /// <summary>
+        /// The keys of the editor window go through here first (see <see cref="WheelFilter"/>)
+        /// </summary>
+        /// <returns>true when the key was used for the KeyTips and must not go on</returns>
+        private bool PreFilterKeyTipMessage(ref Message m)
         {
-            base.OnKeyDown(e);
-
-            // 왕샷: KeyTip 모드 처리
-            if (_keyTipMode)
+            bool mouseDown = m.Msg is WM_LBUTTONDOWN or WM_RBUTTONDOWN or WM_MBUTTONDOWN or WM_NCLBUTTONDOWN;
+            if (m.Msg is not (WM_KEYDOWN or WM_SYSKEYDOWN or WM_SYSKEYUP) && !mouseDown)
             {
-                if (e.KeyCode == Keys.Escape)
+                return false;
+            }
+
+            var form = FindForm();
+            var target = FromChildHandle(m.HWnd);
+            if (form == null || target == null || target.FindForm() != form)
+            {
+                // Another window (a menu, a dialog): the KeyTips end
+                _altPending = false;
+                if (_keyTipMode && (mouseDown || form == null || !form.ContainsFocus))
                 {
                     SetKeyTipMode(false);
-                    e.Handled = true;
-                    return;
                 }
 
-                // KeyTip 문자열 매칭 (단일 문자 또는 숫자)
-                string keyChar = null;
-                if (e.KeyCode >= Keys.A && e.KeyCode <= Keys.Z)
-                {
-                    keyChar = ((char)('A' + (e.KeyCode - Keys.A))).ToString();
-                }
-                else if (e.KeyCode >= Keys.D0 && e.KeyCode <= Keys.D9)
-                {
-                    keyChar = ((char)('0' + (e.KeyCode - Keys.D0))).ToString();
-                }
-                else if (e.KeyCode >= Keys.NumPad0 && e.KeyCode <= Keys.NumPad9)
-                {
-                    keyChar = ((char)('0' + (e.KeyCode - Keys.NumPad0))).ToString();
-                }
+                return false;
+            }
 
-                if (!string.IsNullOrEmpty(keyChar) && _keyTipMap.TryGetValue(keyChar, out var action))
+            if (mouseDown)
+            {
+                _altPending = false;
+                SetKeyTipMode(false);
+                return false;
+            }
+
+            var key = (Keys)(int)((long)m.WParam & 0xFFFF);
+            long lParam = (long)m.LParam;
+            if (key == Keys.ProcessKey)
+            {
+                // The Korean input method holds the letter, ask it which key it was
+                int virtualKey = ImmGetVirtualKey(m.HWnd);
+                if (virtualKey != 0)
                 {
-                    switch (action.Type)
+                    key = (Keys)virtualKey;
+                }
+            }
+
+            switch (m.Msg)
+            {
+                case WM_SYSKEYDOWN when key == Keys.Menu:
+                    // Only the left Alt: on Korean keyboards the right Alt can be the Hangul key. Bit 30: the key repeats.
+                    bool rightAlt = (lParam & (1L << 24)) != 0;
+                    bool repeat = (lParam & (1L << 30)) != 0;
+                    if (!repeat)
                     {
-                        case "Tab":
-                            SelectTab(action.Index);
-                            // 탭 선택 후 해당 탭의 그룹 KeyTips 표시 위해 맵 재구성
-                            BuildKeyTipMap();
-                            Invalidate();
-                            break;
-                        case "Group":
-                            // 그룹 선택 시 해당 그룹의 첫 번째 버튼 포커스 또는 클릭 시뮬레이션
-                            if (action.Index >= 0 && action.Index < _ribbonGroups.Count)
-                            {
-                                var group = _ribbonGroups[action.Index];
-                                if (_stripGroups.TryGetValue(group.Panel, out var stripInfo))
-                                {
-                                    var strip = stripInfo.Strip;
-                                    if (strip != null && strip.Items.Count > 0)
-                                    {
-                                        var firstItem = strip.Items.Cast<ToolStripItem>().FirstOrDefault(i => i.Available && i.Enabled);
-                                        if (firstItem != null)
-                                        {
-                                            // 버튼 클릭 시뮬레이션
-                                            if (firstItem is ToolStripButton btn)
-                                            {
-                                                btn.PerformClick();
-                                            }
-                                            else if (firstItem is ToolStripDropButton dropBtn)
-                                            {
-                                                dropBtn.ShowDropDown();
-                                            }
-                                            else if (firstItem is ToolStripSplitButton splitBtn)
-                                            {
-                                                splitBtn.PerformButtonClick();
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            break;
+                        _altPending = !rightAlt && Visible;
                     }
-                    // KeyTip 액션 후 모드 종료 (Office 스타일: 한 번 누르면 끝)
+
+                    return false;
+                case WM_SYSKEYUP when key == Keys.Menu:
+                    if (!_altPending)
+                    {
+                        return false;
+                    }
+
+                    _altPending = false;
+                    SetKeyTipMode(!_keyTipMode);
+                    // Swallowed: the hidden menu bar would take the keyboard otherwise
+                    return true;
+                case WM_SYSKEYUP:
+                    return false;
+                default:
+                    _altPending = false;
+                    return _keyTipMode && HandleKeyTipKey(key);
+            }
+        }
+
+        /// <summary>
+        /// A key while the KeyTips are shown
+        /// </summary>
+        /// <returns>true when the key was used</returns>
+        private bool HandleKeyTipKey(Keys key)
+        {
+            if (key is Keys.ShiftKey or Keys.ControlKey or Keys.Menu)
+            {
+                return false;
+            }
+
+            if (key == Keys.Escape)
+            {
+                if (_keyTipGroupLevel)
+                {
+                    // One level back: the letters of the tabs
+                    _keyTipGroupLevel = false;
+                    BuildKeyTipMap();
+                    ShowKeyTipBadges();
+                }
+                else
+                {
                     SetKeyTipMode(false);
-                    e.Handled = true;
+                }
+
+                return true;
+            }
+
+            string keyChar = null;
+            if (key is >= Keys.A and <= Keys.Z)
+            {
+                keyChar = ((char)('A' + (key - Keys.A))).ToString();
+            }
+            else if (key is >= Keys.D0 and <= Keys.D9)
+            {
+                keyChar = ((char)('0' + (key - Keys.D0))).ToString();
+            }
+            else if (key is >= Keys.NumPad0 and <= Keys.NumPad9)
+            {
+                keyChar = ((char)('0' + (key - Keys.NumPad0))).ToString();
+            }
+
+            if (keyChar == null || !_keyTipMap.TryGetValue(keyChar, out var action))
+            {
+                // Any other key ends the KeyTips and does what it always does
+                SetKeyTipMode(false);
+                return false;
+            }
+
+            if (action.Type == "Tab")
+            {
+                SelectTab(action.Index);
+                _keyTipGroupLevel = true;
+                BuildKeyTipMap();
+                ShowKeyTipBadges();
+                Invalidate();
+                return true;
+            }
+
+            SetKeyTipMode(false);
+            if (action.Index >= 0 && action.Index < _ribbonGroups.Count && _stripGroups.TryGetValue(_ribbonGroups[action.Index].Panel, out var parts))
+            {
+                FocusStrip(parts.Strip);
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// The keyboard goes into a group: its first button is selected, the arrows move on, Enter uses it
+        /// </summary>
+        private bool FocusStrip(ToolStrip strip)
+        {
+            if (strip == null || !strip.Visible || !strip.Items.Cast<ToolStripItem>().Any(i => i.Available && i.Enabled && i.CanSelect))
+            {
+                return false;
+            }
+
+            // A group outside of a narrow ribbon comes into view first
+            if (strip.Parent is Panel group && group.Parent is FlowLayoutPanel body && body.Parent != null)
+            {
+                int x = body.Left + group.Left;
+                int width = body.Parent.ClientSize.Width;
+                if (x < 0)
+                {
+                    ScrollBody(body, -x);
+                }
+                else if (x + group.Width > width)
+                {
+                    ScrollBody(body, width - (x + group.Width));
                 }
             }
-            else if (e.KeyCode == Keys.Menu && !e.Alt) // Alt 키 단독 눌림
+
+            if (strip is ToolStripEx toolStripEx)
             {
-                SetKeyTipMode(true);
-                e.Handled = true;
+                toolStripEx.SelectFirstItem();
             }
+            else
+            {
+                strip.Focus();
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// 왕캡: F6 moves the keyboard into the first group of the shown tab
+        /// </summary>
+        /// <returns>false when no group of the tab has a button to go to</returns>
+        public bool FocusFirstGroup()
+        {
+            if (_collapsed || _selected < 0 || _selected >= _tabs.Count)
+            {
+                return false;
+            }
+
+            foreach (Control control in _tabs[_selected].Body.Controls)
+            {
+                if (control is Panel panel && panel.Visible && _stripGroups.TryGetValue(panel, out var parts) && FocusStrip(parts.Strip))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// The letters are small labels over the tabs and the captions of the groups (the groups are child controls, painting on the
+        /// ribbon itself would be hidden under them)
+        /// </summary>
+        private void ShowKeyTipBadges()
+        {
+            ClearKeyTipBadges();
+            if (!_keyTipMode)
+            {
+                return;
+            }
+
+            MeasureTabs();
+            int size = Scale(18);
+            foreach (var entry in _keyTipMap)
+            {
+                if (entry.Value.Type == "Tab")
+                {
+                    var bounds = _tabs[entry.Value.Index].Bounds;
+                    AddKeyTipBadge(this, entry.Key, new Point(bounds.Left + (bounds.Width - size) / 2, bounds.Bottom - size / 3));
+                }
+                else if (entry.Value.Index >= 0 && entry.Value.Index < _ribbonGroups.Count)
+                {
+                    var panel = _ribbonGroups[entry.Value.Index].Panel;
+                    if (!_stripGroups.TryGetValue(panel, out var parts) || !panel.Visible)
+                    {
+                        continue;
+                    }
+
+                    // On the left of the caption, so the name of the group stays readable
+                    var caption = parts.Label;
+                    int textWidth = TextRenderer.MeasureText(caption.Text ?? string.Empty, caption.Font).Width;
+                    int x = Math.Max(Scale(2), (panel.Width - textWidth) / 2 - size - Scale(2));
+                    AddKeyTipBadge(panel, entry.Key, new Point(x, caption.Top + Math.Max(0, (caption.Height - size) / 2)));
+                }
+            }
+        }
+
+        private void AddKeyTipBadge(Control parent, string text, Point location)
+        {
+            var theme = EditorTheme.Current;
+            var badge = new Label
+            {
+                Text = text,
+                AutoSize = false,
+                Size = new Size(Scale(18), Scale(18)),
+                Location = location,
+                TextAlign = ContentAlignment.MiddleCenter,
+                UseMnemonic = false,
+                Font = new Font(Font.FontFamily, Math.Max(6f, Font.Size - 1f), FontStyle.Bold),
+                BackColor = theme.Highlight,
+                ForeColor = theme.Window
+            };
+            parent.Controls.Add(badge);
+            badge.BringToFront();
+            _keyTipBadges.Add(badge);
+        }
+
+        private void ClearKeyTipBadges()
+        {
+            foreach (var badge in _keyTipBadges)
+            {
+                var font = badge.Font;
+                badge.Parent?.Controls.Remove(badge);
+                badge.Dispose();
+                font.Dispose();
+            }
+
+            _keyTipBadges.Clear();
         }
     }
 }

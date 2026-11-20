@@ -90,7 +90,7 @@ namespace Greenshot.Editor.Forms
                 (btnSave, "저장 (Ctrl+S)"),
                 (saveAs, null));
             AddRibbonGroup(file, "캡처",
-                (NewAction("스크롤 캡처", "스크롤 캡처", "scrollCapture.Image", (s, e) => SimpleServiceProvider.Current.GetInstance<IGreenshotShell>().StartScrollCapture()), null));
+                (NewAction("스크롤 캡처", "스크롤 캡처: 누르고 3초 안에 캡처할 창 위에 마우스를 올려 두세요.\n창을 끝까지 스크롤하며 한 장으로 이어 붙여요 (Esc로 멈춤)", "scrollCapture.Image", (s, e) => StartScrollCaptureFromRibbon()), null));
             AddRibbonGroup(file, "창", (Proxy(closeToolStripMenuItem, "창 닫기"), null));
 
             // 왕샷: 파일 탭 그룹 KeyTips
@@ -104,7 +104,7 @@ namespace Greenshot.Editor.Forms
             var clipboardGroup = AddRibbonGroup(edit, "클립보드", (btnPaste, "붙여넣기 (Ctrl+V)"), (btnCut, "잘라내기 (Ctrl+X)"), (btnCopy, "복사 (Ctrl+C)"), (btnDelete, "삭제 (Del)"));
             foreach (ToolStripItem item in clipboardGroup.Items)
             {
-                item.Padding = new Padding(2, 2, 2, 28);
+                UseChevronRow(item);
             }
 
             // 선택/영역 도구
@@ -139,7 +139,7 @@ namespace Greenshot.Editor.Forms
                 (editText, "글자"), (editSpeech, "말풍선"));
             foreach (ToolStripItem tool in drawTools.Items)
             {
-                tool.Padding = new Padding(2, 2, 2, 28);
+                UseChevronRow(tool);
             }
 
             // ---- 강조 도구 그룹 (신규, 분리) ----
@@ -147,7 +147,7 @@ namespace Greenshot.Editor.Forms
                 (editEmphasis, "강조"));
             foreach (ToolStripItem tool in emphasisGroup.Items)
             {
-                tool.Padding = new Padding(2, 2, 2, 28);
+                UseChevronRow(tool);
             }
 
             // ---- 이미지 그룹 ----
@@ -164,7 +164,7 @@ namespace Greenshot.Editor.Forms
                 (effectsTool, "효과"));
             foreach (ToolStripItem item in imageGroup.Items)
             {
-                item.Padding = new Padding(2, 2, 2, 28);
+                UseChevronRow(item);
             }
 
             // 색상 팔레트 (기존 유지)
@@ -224,7 +224,7 @@ namespace Greenshot.Editor.Forms
             IconBinder.Bind(obfuscateTool, IconSource.FromResource(typeof(ImageEditorForm), "obfuscateModeButton.Image"));
             AddRibbonGroup(annotation, "가리기",
                 (obfuscateTool, "가리기"),
-                (NewAction("민감정보 자동", "전화번호·이메일·주민등록번호·카드번호를 OCR로 찾아 자동으로 가려요", "obfuscateModeButton.Image", (s, e) => ObfuscateSensitiveInfo()), null));
+                (NewAction("민감정보 자동", "민감정보 자동 가리기: 전화번호·이메일·주민등록번호·카드번호를 글자 인식(OCR)으로 찾아 모자이크로 가려요.\n결과는 아래 상태 표시줄에 나와요. 놓친 곳이 없는지 꼭 확인하세요 (Ctrl+Z로 되돌리기)", "obfuscateModeButton.Image", (s, e) => ObfuscateSensitiveInfo()), null));
 
             // 스탬프 그룹 (번호/이모지/화살표 스탬프)
             AddRibbonGroup(annotation, "스탬프",
@@ -276,10 +276,11 @@ namespace Greenshot.Editor.Forms
             // ============================================================
             // 보기 탭 - 확대/축소 / 표시 / 레이아웃
             // ============================================================
-            var zoomIn = NewZoomButton("zoomInMenuItem.Image", "확대 (Ctrl++)", (s, e) => ZoomInMenuItemClick(s, e));
-            var zoomOut = NewZoomButton("zoomOutMenuItem.Image", "축소 (Ctrl+-)", (s, e) => ZoomOutMenuItemClick(s, e));
-            var zoomActual = NewZoomButton("zoomActualSizeMenuItem.Image", "100% (Ctrl+0)", (s, e) => ZoomSetValueMenuItemClick(zoomActualSizeMenuItem, e));
-            var zoomFit = NewZoomButton("zoomBestFitMenuItem.Image", "맞춤 (Ctrl+9)", (s, e) => ZoomBestFitMenuItemClick(s, e));
+            // 왕캡: short names under the icons, the shortcut keys in the tool tips (like every other button)
+            var zoomIn = NewAction("확대", "확대 (Ctrl++)", "zoomInMenuItem.Image", (s, e) => ZoomInMenuItemClick(s, e));
+            var zoomOut = NewAction("축소", "축소 (Ctrl+-)", "zoomOutMenuItem.Image", (s, e) => ZoomOutMenuItemClick(s, e));
+            var zoomActual = NewAction("100%", "실제 크기 100% (Ctrl+0)", "zoomActualSizeMenuItem.Image", (s, e) => ZoomSetValueMenuItemClick(zoomActualSizeMenuItem, e));
+            var zoomFit = NewAction("창에 맞춤", "창에 맞춤 (Ctrl+9)", "zoomBestFitMenuItem.Image", (s, e) => ZoomBestFitMenuItemClick(s, e));
             AddRibbonGroup(view, "확대/축소", (zoomIn, null), (zoomOut, null), (zoomActual, null), (zoomFit, null));
 
             var rulerButton = NewAction("눈금자", "가로·세로 눈금자 보이기/숨기기", "ruler.Image", (s, e) => SetRulersShown(((ToolStripButton)s).Checked));
@@ -289,10 +290,10 @@ namespace Greenshot.Editor.Forms
             _recentCapturesButton = NewAction("최근 캡처", "왼쪽 사이드바에 최근 캡처 표시/숨기기", "recentCaptures.Image", (s, e) => SetRecentCapturesPanelShown(((ToolStripButton)s).Checked));
             _recentCapturesButton.CheckOnClick = true;
 
-            var gridButton = NewAction("그리드", "그리드 표시/숨기기", "grid.Image", (s, e) => ToggleGrid());
+            var gridButton = NewAction("그리드", "격자(그리드) 보이기/숨기기", "grid.Image", (s, e) => ToggleGrid());
             gridButton.CheckOnClick = true;
 
-            _fullscreenButton = NewAction("전체 화면", "전체 화면 모드 (F11)", "fullscreen.Image", (s, e) => ToggleFullscreen());
+            _fullscreenButton = NewAction("전체 화면", FullscreenTip, "fullscreen.Image", (s, e) => ToggleFullscreen());
             AddRibbonGroup(view, "표시", (rulerButton, null), (_recentCapturesButton, null), (gridButton, null), (_fullscreenButton, null));
 
             AddRibbonGroup(view, "화면 위치",
@@ -308,10 +309,10 @@ namespace Greenshot.Editor.Forms
             // ============================================================
             AddRibbonGroup(export, "클립보드",
                 (btnClipboard, "전체 이미지 복사"),
-                (NewAction("텍스트 복사", "OCR로 텍스트 추출 복사 (Ctrl+Shift+T)", "copyText.Image", (s, e) => CopyOcrText()), null));
+                (NewAction("텍스트 복사", "이미지 속 글자를 인식(OCR)해 클립보드에 복사 (Ctrl+Shift+T)", "copyText.Image", (s, e) => CopyOcrText()), null));
 
             AddRibbonGroup(export, "저장",
-                (NewAction("PDF로 저장", "이미지를 PDF 파일로 저장해요", "pdfFile.Image", (s, e) => SaveAsPdf()), null));
+                (NewAction("PDF로 저장", "이미지를 PDF 파일로 저장해요 (용지·여백은 PDF 설정을 따라요)", "pdfFile.Image", (s, e) => SaveAsPdf()), null));
             _ribbonShareStrip = AddRibbonGroup(export, "보내기");
 
             // 왕샷: 내보내기 탭 그룹 KeyTips
@@ -326,8 +327,8 @@ namespace Greenshot.Editor.Forms
             var quick = _ribbon.QuickAccess;
             foreach (var item in new ToolStripItem[]
                      {
-                         NewAction(null, "새로 만들기", "newImage.Image", (s, e) => AddNewImageTab()),
-                         NewAction(null, "열기", "openFile.Image", (s, e) => OpenImageFile()),
+                         NewAction(null, "새로 만들기 (Ctrl+N)", "newImage.Image", (s, e) => AddNewImageTab()),
+                         NewAction(null, "열기 (Ctrl+O)", "openFile.Image", (s, e) => OpenImageFile()),
                          Proxy(btnSave, null),
                          new ToolStripSeparator(),
                          Proxy(undoToolStripMenuItem, null),
@@ -376,11 +377,14 @@ namespace Greenshot.Editor.Forms
             ApplyRibbonDpi(DeviceDpi);
             BuildTabOverview();
             BuildRulers();
-            // The ribbon needs room: a narrow editor would hide most buttons
-            MinimumSize = new Size(Math.Max(MinimumSize.Width, LogicalToDeviceUnits(1280)), MinimumSize.Height);
-            if (Width < MinimumSize.Width)
+            // 왕캡: the editor opens wide enough for the whole ribbon, but it may be made narrower (e.g. half of the screen next to the
+            // document): arrows on the edges of the ribbon then show and move the groups which do not fit. Never wider than the screen.
+            int workingWidth = Screen.FromControl(this).WorkingArea.Width;
+            MinimumSize = new Size(Math.Min(Math.Max(MinimumSize.Width, LogicalToDeviceUnits(600)), workingWidth), MinimumSize.Height);
+            int preferredWidth = Math.Min(LogicalToDeviceUnits(1280), workingWidth);
+            if (Width < preferredWidth && WindowState == FormWindowState.Normal)
             {
-                Width = MinimumSize.Width;
+                Width = preferredWidth;
             }
 
             // WangShot: the panel with the recent captures, if it was shown the last time
@@ -741,8 +745,40 @@ namespace Greenshot.Editor.Forms
             catch (Exception ex)
             {
                 Log.Warn("Could not save the PDF " + dialog.FileName, ex);
-                MessageBox.Show(this, "PDF로 저장하지 못했어요.", "왕캡", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "PDF로 저장하지 못했어요.\n" + ex.Message, "왕캡", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
             }
+
+            // 왕캡: no dialog for a success, the status bar says where the file is
+            ShowRibbonStatus("PDF로 저장했어요: " + dialog.FileName);
+        }
+
+        /// <summary>
+        /// 왕캡: a short notice in the status bar of the editor (it does not block like a message box; a screen reader reads it)
+        /// </summary>
+        private void ShowRibbonStatus(string text, bool isError = false)
+        {
+            _surface?.SendMessageEvent(this, isError ? SurfaceMessageTyp.Error : SurfaceMessageTyp.Info, text);
+        }
+
+        /// <summary>
+        /// 왕캡: the scroll capture starts after a delay of a few seconds, the status bar says what to do meanwhile
+        /// </summary>
+        private void StartScrollCaptureFromRibbon()
+        {
+            ShowRibbonStatus("스크롤 캡처: 3초 안에 캡처할 창 위에 마우스를 올려 두세요. Esc로 멈출 수 있어요.");
+            SimpleServiceProvider.Current.GetInstance<IGreenshotShell>().StartScrollCapture();
+        }
+
+        // 왕캡: the large buttons which keep a row for a chevron under their name
+        private readonly HashSet<ToolStripItem> _chevronRowItems = new();
+
+        private static int ChevronRowHeight(int dpi) => Math.Max(28, (int)Math.Round(28 * dpi / 96.0));
+
+        private void UseChevronRow(ToolStripItem item)
+        {
+            _chevronRowItems.Add(item);
+            item.Padding = new Padding(2, 2, 2, ChevronRowHeight(DeviceDpi));
         }
 
         private void FitRibbonHost()
@@ -766,6 +802,16 @@ namespace Greenshot.Editor.Forms
                 return;
             }
 
+            // 왕캡: the row for the chevron grows with the DPI, like the chevron itself (see ToolStripDropButton.ChevronBounds)
+            foreach (var item in _chevronRowItems)
+            {
+                var wanted = new Padding(2, 2, 2, ChevronRowHeight(dpi));
+                if (item.Padding != wanted)
+                {
+                    item.Padding = wanted;
+                }
+            }
+
             foreach (var strip in _ribbon.Strips)
             {
                 IconBinder.ApplyForDpi(strip, dpi, "the editor ribbon");
@@ -778,8 +824,6 @@ namespace Greenshot.Editor.Forms
                 IconBinder.Apply(strip, small);
             }
         }
-
-        private ToolStripButton NewZoomButton(string iconResource, string text, EventHandler onClick) => NewAction(text, text, iconResource, onClick);
 
         /// <summary>
         /// A new button with an icon from the resources of the editor
@@ -802,6 +846,17 @@ namespace Greenshot.Editor.Forms
         private static ToolStripButton Proxy(ToolStripItem source, string label)
         {
             string tip = !string.IsNullOrEmpty(source.ToolTipText) ? source.ToolTipText : (source.Text ?? string.Empty).Replace("&", string.Empty);
+            // 왕캡: the shortcut key of the menu item belongs in the tool tip, like on the other buttons
+            if (source is ToolStripMenuItem menuItem && !tip.Contains("("))
+            {
+                string shortcut = !string.IsNullOrEmpty(menuItem.ShortcutKeyDisplayString) ? menuItem.ShortcutKeyDisplayString
+                    : menuItem.ShortcutKeys != Keys.None ? new KeysConverter().ConvertToString(menuItem.ShortcutKeys) : null;
+                if (!string.IsNullOrEmpty(shortcut))
+                {
+                    tip += " (" + shortcut + ")";
+                }
+            }
+
             var button = new ToolStripButton { Text = label ?? string.Empty, ToolTipText = tip, Enabled = source.Enabled };
             if (!IconBinder.BindLike(button, source))
             {
@@ -833,6 +888,16 @@ namespace Greenshot.Editor.Forms
                 MakeLarge(item, label);
             }
 
+            // 왕캡: a button with a chevron needs the row under its name (else the chevron is drawn over the name); the other buttons
+            // of the group get the same height, so the icons stay in one line
+            if (items.Any(entry => entry.Item is ToolStripDropButton { DropDown: not null }))
+            {
+                foreach (var (item, _) in items)
+                {
+                    UseChevronRow(item);
+                }
+            }
+
             return strip;
         }
 
@@ -857,7 +922,10 @@ namespace Greenshot.Editor.Forms
 
             if (!string.IsNullOrEmpty(label))
             {
-                item.Text = label;
+                // 왕캡: one rule for every button - a short name under the icon, the shortcut key only in the tool tip
+                string name = ToolStripDropButton.SplitShortcut(label, out string shortcut);
+                item.Text = name;
+                item.ToolTipText = ToolStripDropButton.WithShortcut(item.ToolTipText, shortcut);
             }
 
             item.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
@@ -1047,6 +1115,7 @@ namespace Greenshot.Editor.Forms
         /// <summary>
         /// 전체 화면 토글
         /// </summary>
+        private const string FullscreenTip = "전체 화면 (F11) - 리본과 상태 표시줄만 남기고 화면을 꽉 채워요";
         private bool _fullscreen;
         private FormWindowState _beforeFullscreenState;
         private FormBorderStyle _beforeFullscreenBorder;
@@ -1057,18 +1126,27 @@ namespace Greenshot.Editor.Forms
                 _beforeFullscreenState = WindowState;
                 _beforeFullscreenBorder = FormBorderStyle;
                 _fullscreen = true;
-                WindowState = FormWindowState.Maximized;
+                // 왕캡: a window which is maximized already keeps the room of the task bar, unless it is made normal first
+                if (WindowState == FormWindowState.Maximized)
+                {
+                    WindowState = FormWindowState.Normal;
+                }
+
                 FormBorderStyle = FormBorderStyle.None;
+                WindowState = FormWindowState.Maximized;
                 _fullscreenButton.Text = "전체 화면 종료";
                 _fullscreenButton.ToolTipText = "전체 화면 종료 (F11)";
+                ShowRibbonStatus("전체 화면이에요. F11 또는 [보기] 탭의 '전체 화면 종료'로 돌아갈 수 있어요.");
             }
             else
             {
                 _fullscreen = false;
+                // Normal first, so the window gets its border and its old size back
+                WindowState = FormWindowState.Normal;
                 FormBorderStyle = _beforeFullscreenBorder;
                 WindowState = _beforeFullscreenState;
                 _fullscreenButton.Text = "전체 화면";
-                _fullscreenButton.ToolTipText = "전체 화면 모드 (F11)";
+                _fullscreenButton.ToolTipText = FullscreenTip;
             }
         }
 
@@ -1119,15 +1197,29 @@ namespace Greenshot.Editor.Forms
                     MessageBox.Show(this, "사용 가능한 글자 인식 엔진이 없습니다.", "왕캡", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
-                using var image = _surface.GetImageForExport();
-                var lines = await provider.DoOcrAsync(image);
-                var text = string.Join(Environment.NewLine, (lines ?? new System.Collections.Generic.List<Greenshot.Base.Interfaces.Plugin.IOcrLineFeature>()).Select(line => line.Text));
+                List<Greenshot.Base.Interfaces.Plugin.IOcrLineFeature> lines;
+                ShowRibbonStatus("글자를 인식하는 중이에요…");
+                Cursor = Cursors.WaitCursor;
+                try
+                {
+                    using var image = _surface.GetImageForExport();
+                    lines = await provider.DoOcrAsync(image);
+                }
+                finally
+                {
+                    Cursor = Cursors.Default;
+                }
+
+                var recognized = (lines ?? new List<Greenshot.Base.Interfaces.Plugin.IOcrLineFeature>()).Where(line => !string.IsNullOrWhiteSpace(line.Text)).ToList();
+                var text = string.Join(Environment.NewLine, recognized.Select(line => line.Text));
                 if (string.IsNullOrWhiteSpace(text))
                 {
-                    MessageBox.Show(this, "인식된 글자가 없습니다. Windows 글자 인식 언어 설정을 확인해 주세요.", "왕캡", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    // 왕캡: a notice in the status bar is enough, nothing changed
+                    ShowRibbonStatus("인식된 글자가 없어요. Windows 글자 인식 언어(한국어) 설정을 확인해 주세요.");
                     return;
                 }
                 Clipboard.SetText(text);
+                ShowRibbonStatus($"글자 {recognized.Count}줄을 클립보드에 복사했어요.");
             }
             catch (Exception ex)
             {

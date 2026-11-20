@@ -18,6 +18,46 @@ namespace Greenshot.Editor.Controls
         {
             public ToolStripButton Real;
             public string Label;
+            public string Shortcut;
+        }
+
+        /// <summary>
+        /// 왕캡: "사각형 (R)" is the name "사각형" and the shortcut key "R"
+        /// </summary>
+        internal static string SplitShortcut(string label, out string shortcut)
+        {
+            shortcut = null;
+            if (string.IsNullOrEmpty(label) || !label.EndsWith(")"))
+            {
+                return label;
+            }
+
+            int open = label.LastIndexOf(" (", StringComparison.Ordinal);
+            if (open <= 0)
+            {
+                return label;
+            }
+
+            shortcut = label.Substring(open + 2, label.Length - open - 3);
+            return label.Substring(0, open);
+        }
+
+        /// <summary>
+        /// 왕캡: the tool tip with the shortcut key at its end, unless the tool tip names it already
+        /// </summary>
+        internal static string WithShortcut(string tip, string shortcut)
+        {
+            if (string.IsNullOrEmpty(shortcut))
+            {
+                return tip;
+            }
+
+            if (string.IsNullOrEmpty(tip))
+            {
+                return shortcut;
+            }
+
+            return tip.Contains("(" + shortcut + ")") || tip.Contains(shortcut + ")") || tip.Contains("단축키: " + shortcut) ? tip : tip + " (" + shortcut + ")";
         }
 
         private readonly List<Member> _members = new();
@@ -89,6 +129,8 @@ namespace Greenshot.Editor.Controls
                     Real = members[i].Real,
                     Label = string.IsNullOrWhiteSpace(members[i].Label) ? members[i].Real.Text : members[i].Label
                 };
+                // 왕캡: the shortcut key goes into the tool tip and to the right of the menu item, not under the icon
+                member.Label = SplitShortcut(member.Label, out member.Shortcut);
                 _members.Add(member);
                 member.Real.CheckedChanged += (s, e) =>
                 {
@@ -115,7 +157,7 @@ namespace Greenshot.Editor.Controls
             _active = index;
             var member = _members[index];
             Text = member.Label;
-            ToolTipText = member.Real.ToolTipText;
+            ToolTipText = WithShortcut(member.Real.ToolTipText, member.Shortcut);
             if (!IconBinder.BindLike(this, member.Real))
             {
                 Image = member.Real.Image;
@@ -140,7 +182,9 @@ namespace Greenshot.Editor.Controls
                 {
                     Checked = member.Real.Checked,
                     Enabled = member.Real.Enabled,
-                    ToolTipText = member.Real.ToolTipText,
+                    ToolTipText = WithShortcut(member.Real.ToolTipText, member.Shortcut),
+                    ShortcutKeyDisplayString = member.Shortcut,
+                    ShowShortcutKeys = member.Shortcut != null,
                     Padding = new Padding(4, 4, 12, 4)
                 };
                 item.Click += (s, e) => Activate(index, true);
@@ -200,6 +244,22 @@ namespace Greenshot.Editor.Controls
             }
 
             base.OnClick(e);
+        }
+
+        /// <summary>
+        /// 왕캡: the keyboard opens the choices too - Down arrow, Alt+Down or F4 (Enter and Space use the tool, like a click)
+        /// </summary>
+        protected override bool ProcessDialogKey(Keys keyData)
+        {
+            if (DropDown != null && Enabled && (keyData == Keys.Down || keyData == (Keys.Alt | Keys.Down) || keyData == Keys.F4))
+            {
+                ShowDropDown();
+                var first = DropDown.Items.Cast<ToolStripItem>().FirstOrDefault(item => item.Available && item.Enabled && item.CanSelect);
+                first?.Select();
+                return true;
+            }
+
+            return base.ProcessDialogKey(keyData);
         }
 
         /// <summary>

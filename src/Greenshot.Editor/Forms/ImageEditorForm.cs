@@ -2802,11 +2802,15 @@ namespace Greenshot.Editor.Forms
         private void FocusNextPart(bool forward)
         {
             const int canvasIndex = 4;
-            var parts = new Control[] { menuStrip1, toolsToolStrip, propertiesToolStrip, destinationsToolStrip, _surface, tabStrip };
-            int current = Array.FindIndex(parts, part => part != null && part.ContainsFocus);
+            // 왕캡: with the ribbon the menu bar is out of sight and the destinations are in the ribbon: F6 goes to the shown ribbon tab instead
+            var parts = _ribbon != null
+                ? new Control[] { _ribbon, toolsToolStrip, propertiesToolStrip, null, _surface, tabStrip }
+                : new Control[] { menuStrip1, toolsToolStrip, propertiesToolStrip, destinationsToolStrip, _surface, tabStrip };
+            // The options of the tool lie inside the ribbon: they are looked at before the ribbon itself
+            int current = Array.FindIndex(parts, part => part != null && !ReferenceEquals(part, _ribbon) && part.ContainsFocus);
             if (current < 0)
             {
-                current = canvasIndex;
+                current = _ribbon != null && _ribbon.ContainsFocus ? 0 : canvasIndex;
             }
 
             for (int step = 1; step < parts.Length; step++)
@@ -2819,6 +2823,10 @@ namespace Greenshot.Editor.Forms
 
                 switch (part)
                 {
+                    case EditorRibbon ribbon when ribbon.FocusFirstGroup():
+                        return;
+                    case EditorRibbon:
+                        continue;
                     case MenuStripEx menuStrip:
                         menuStrip.SelectFirstItem();
                         return;
