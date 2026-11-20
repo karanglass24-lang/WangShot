@@ -34,6 +34,7 @@ namespace Greenshot.Editor.Forms
         // 왕샷: the panel with the recent captures, left of the canvas
         private RecentCapturesPanel _recentCapturesPanel;
         private ToolStripButton _recentCapturesButton;
+        private ToolStripButton _fullscreenButton;
         // 왕샷: 서식 컨텍스트 탭 인덱스
         private int _formatTabIndex = -1;
         // 왕샷: 서식 탭의 컨트롤들 (표면이 연결될 때 바인딩한다 - 폼 생성 시에는 _surface가 아직 없다)
@@ -222,7 +223,8 @@ namespace Greenshot.Editor.Forms
             var obfuscateTool = new ToolStripDropButton { ToolTipText = "가리기 (O) - 픽셀화/블러/단색/텍스트 가리기", DropDown = obfuscateModeButton.DropDown };
             IconBinder.Bind(obfuscateTool, IconSource.FromResource(typeof(ImageEditorForm), "obfuscateModeButton.Image"));
             AddRibbonGroup(annotation, "가리기",
-                (obfuscateTool, "가리기"));
+                (obfuscateTool, "가리기"),
+                (NewAction("민감정보 자동", "전화번호·이메일·주민등록번호·카드번호를 OCR로 찾아 자동으로 가려요", "obfuscateModeButton.Image", (s, e) => ObfuscateSensitiveInfo()), null));
 
             // 스탬프 그룹 (번호/이모지/화살표 스탬프)
             AddRibbonGroup(annotation, "스탬프",
@@ -290,8 +292,8 @@ namespace Greenshot.Editor.Forms
             var gridButton = NewAction("그리드", "그리드 표시/숨기기", "grid.Image", (s, e) => ToggleGrid());
             gridButton.CheckOnClick = true;
 
-            var fullscreenButton = NewAction("전체 화면", "전체 화면 모드 (F11)", "fullscreen.Image", (s, e) => ToggleFullscreen());
-            AddRibbonGroup(view, "표시", (rulerButton, null), (_recentCapturesButton, null), (gridButton, null), (fullscreenButton, null));
+            _fullscreenButton = NewAction("전체 화면", "전체 화면 모드 (F11)", "fullscreen.Image", (s, e) => ToggleFullscreen());
+            AddRibbonGroup(view, "표시", (rulerButton, null), (_recentCapturesButton, null), (gridButton, null), (_fullscreenButton, null));
 
             AddRibbonGroup(view, "화면 위치",
                 (NewAction("화면 중앙 보기", "이미지의 가운데로 화면 이동", "zoomBestFitMenuItem.Image", (s, e) => CenterCanvas()), null));
@@ -724,8 +726,17 @@ namespace Greenshot.Editor.Forms
 
             try
             {
-                using var image = _surface.GetImageForExport();
-                PdfExport.Save(image, dialog.FileName);
+                // The PDF plugin writes it with its own settings (page size, margins, scaling), the same as the PDF destination
+                try
+                {
+                    ImageIO.Save(_surface, dialog.FileName, true, new Greenshot.Base.Interfaces.Plugin.SurfaceOutputSettings("pdf"), false);
+                }
+                catch (Exception pluginException)
+                {
+                    Log.Warn("The PDF plugin could not save " + dialog.FileName + ", the built in PDF export is used", pluginException);
+                    using var image = _surface.GetImageForExport();
+                    PdfExport.Save(image, dialog.FileName);
+                }
             }
             catch (Exception ex)
             {
@@ -1048,14 +1059,16 @@ namespace Greenshot.Editor.Forms
                 _fullscreen = true;
                 WindowState = FormWindowState.Maximized;
                 FormBorderStyle = FormBorderStyle.None;
-                topToolStripContainer.TopToolStripPanel.Visible = false;
+                _fullscreenButton.Text = "전체 화면 종료";
+                _fullscreenButton.ToolTipText = "전체 화면 종료 (F11)";
             }
             else
             {
                 _fullscreen = false;
                 FormBorderStyle = _beforeFullscreenBorder;
                 WindowState = _beforeFullscreenState;
-                topToolStripContainer.TopToolStripPanel.Visible = true;
+                _fullscreenButton.Text = "전체 화면";
+                _fullscreenButton.ToolTipText = "전체 화면 모드 (F11)";
             }
         }
 

@@ -249,7 +249,9 @@ namespace Greenshot.Capturing
                 }
 
                 // Start conservatively: a large first jump can lose the overlap needed to stitch.
-                int notches = 1;
+                // The wheel moves in units of 1/120 notch; windows that scroll a lot per notch (large windows, smooth scrolling) need fractions of a notch.
+                int delta = 60;
+                int shrinks = 0;
                 while (stitcher.FrameCount < MaximumFrames && stitcher.TotalHeight < MaximumHeight)
                 {
                     if ((GetAsyncKeyState(0x1B) & 0x8000) != 0)
@@ -258,7 +260,7 @@ namespace Greenshot.Capturing
                         break;
                     }
 
-                    mouse_event(0x0800 /* MOUSEEVENTF_WHEEL */, 0, 0, unchecked((uint)(-120 * notches)), UIntPtr.Zero);
+                    mouse_event(0x0800 /* MOUSEEVENTF_WHEEL */, 0, 0, unchecked((uint)(-delta)), UIntPtr.Zero);
                     bool added = false;
                     bool atEnd = false;
                     // A picture which doesn't fit (the page was still moving, a picture was loaded) gets another try before it is the end
@@ -274,13 +276,24 @@ namespace Greenshot.Capturing
 
                     if (!added)
                     {
+                        // The jump was probably too big and lost the overlap: go back, take a smaller step and try again
+                        if (!atEnd && delta > 20 && shrinks < 4)
+                        {
+                            mouse_event(0x0800, 0, 0, unchecked((uint)delta), UIntPtr.Zero);
+                            await Task.Delay(500).ConfigureAwait(false);
+                            delta = Math.Max(20, delta / 2);
+                            shrinks++;
+                            continue;
+                        }
+
                         break;
                     }
 
-                    // The steps should be about 60 % of the picture: more notches when the page moves little, fewer when it moves a lot
+                    shrinks = 0;
+                    // The steps should be about 60 % of the picture: bigger steps when the page moves little, smaller when it moves a lot
                     if (stitcher.LastMove > 0)
                     {
-                        notches = Math.Max(1, Math.Min(10, (int)Math.Round(notches * 0.6 * stitcher.FrameHeight / stitcher.LastMove)));
+                        delta = Math.Max(20, Math.Min(1200, (int)Math.Round(delta * 0.6 * stitcher.FrameHeight / stitcher.LastMove)));
                     }
                 }
                 return (stitcher.Finish(), stitcher.FrameCount, stopped);

@@ -84,7 +84,11 @@ namespace Greenshot.Editor.Controls
             for (int i = 0; i < members.Length; i++)
             {
                 int index = i;
-                var member = new Member { Real = members[i].Real, Label = members[i].Label };
+                var member = new Member
+                {
+                    Real = members[i].Real,
+                    Label = string.IsNullOrWhiteSpace(members[i].Label) ? members[i].Real.Text : members[i].Label
+                };
                 _members.Add(member);
                 member.Real.CheckedChanged += (s, e) =>
                 {
@@ -132,7 +136,13 @@ namespace Greenshot.Editor.Controls
             {
                 int index = i;
                 var member = _members[i];
-                var item = new ToolStripMenuItem(member.Label, member.Real.Image != null ? (Image)member.Real.Image.Clone() : null) { Checked = member.Real.Checked };
+                var item = new ToolStripMenuItem(member.Label, member.Real.Image != null ? (Image)member.Real.Image.Clone() : null)
+                {
+                    Checked = member.Real.Checked,
+                    Enabled = member.Real.Enabled,
+                    ToolTipText = member.Real.ToolTipText,
+                    Padding = new Padding(4, 4, 12, 4)
+                };
                 item.Click += (s, e) => Activate(index, true);
                 menu.Items.Add(item);
             }

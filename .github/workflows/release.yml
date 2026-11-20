@@ -80,6 +80,11 @@ jobs:
         Picasa_ClientId: ${{ secrets.Picasa_ClientId }}
         Picasa_ClientSecret: ${{ secrets.Picasa_ClientSecret }}
 
+    # 편집기가 실제로 열리는지 확인한다 (v1.5.0 에서 생성자 예외로 편집기가 안 열렸던 회귀 방지)
+    - name: Editor smoke test
+      shell: pwsh
+      run: ./scripts/smoke-editor.ps1
+
     # The release tag, the installer file name and the in-app version all come from these two numbers, so they must
     # match: the updater compares the tag against WangShotInfo.Version of the installed copy
     - name: Check the 왕샷 version of the installer

@@ -36,6 +36,25 @@ namespace Greenshot.Tests.Editor
                                                      strip.Items.Cast<ToolStripItem>().Any(item => item.Text == "우회전"));
                     Assert.Contains(strips, strip => strip.Items.Cast<ToolStripItem>().Any(item => item.Text == "전체 이미지 복사") &&
                                                      strip.Items.Cast<ToolStripItem>().Any(item => item.Text == "텍스트 복사"));
+                    int checkedMenus = 0;
+                    foreach (var item in strips.SelectMany(strip => strip.Items.Cast<ToolStripItem>())
+                                 .Where(item => item.GetType().Name == "ToolStripDropButton"))
+                    {
+                        var type = item.GetType();
+                        var members = (System.Collections.ICollection)type.GetField("_members", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(item);
+                        if (members.Count == 0) continue;
+                        var menu = (ToolStripDropDownMenu)type.GetProperty("DropDown").GetValue(item);
+                        type.GetMethod("RebuildMenu", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(item, new object[] { menu });
+                        Assert.All(menu.Items.Cast<ToolStripItem>(), choice => Assert.False(string.IsNullOrWhiteSpace(choice.Text)));
+                        checkedMenus++;
+                    }
+                    Assert.True(checkedMenus >= 8);
+                    var toggleFullscreen = typeof(ImageEditorForm).GetMethod("ToggleFullscreen", BindingFlags.Instance | BindingFlags.NonPublic);
+                    var fullscreenButton = (ToolStripButton)typeof(ImageEditorForm).GetField("_fullscreenButton", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(editor);
+                    toggleFullscreen.Invoke(editor, null);
+                    Assert.Equal("전체 화면 종료", fullscreenButton.Text);
+                    toggleFullscreen.Invoke(editor, null);
+                    Assert.Equal("전체 화면", fullscreenButton.Text);
                     // Selecting the text tool binds an integer line thickness to the format tab.
                     surface.DrawingMode = DrawingModes.Text;
                     Assert.Equal(DrawingModes.Text, surface.DrawingMode);
