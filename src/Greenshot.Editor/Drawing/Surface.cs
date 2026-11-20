@@ -4456,7 +4456,10 @@ namespace Greenshot.Editor.Drawing
         public void PasteFormat()
         {
             if (!HasSelectedElements || _copiedFormat == null) return;
-            foreach (var element in selectedElements.OfType<DrawableContainer>())
+            // 왕캡: one undo step for the whole format (Ctrl+Z undid an older action before)
+            var elements = selectedElements.OfType<DrawableContainer>().ToList();
+            MakeUndoable(new FieldValuesMemento(elements), false);
+            foreach (var element in elements)
             {
                 element.ApplyFormat(_copiedFormat);
             }
@@ -4470,10 +4473,13 @@ namespace Greenshot.Editor.Drawing
         public void FlipSelected(bool horizontal)
         {
             if (!HasSelectedElements) return;
-            foreach (var element in selectedElements.OfType<DrawableContainer>())
+            // 왕캡: the flip can be undone (a flip again)
+            var elements = selectedElements.OfType<DrawableContainer>().ToList();
+            foreach (var element in elements)
             {
                 element.Flip(horizontal);
             }
+            MakeUndoable(new FlipMemento(elements, horizontal), false);
             Invalidate();
             _modified = true;
         }
@@ -4500,8 +4506,8 @@ namespace Greenshot.Editor.Drawing
             var element = selectedElements.FirstOrDefault() as DrawableContainer;
             if (element == null) return;
             using var dialog = new Form { Text = "개체 크기 지정", FormBorderStyle = FormBorderStyle.FixedDialog, StartPosition = FormStartPosition.CenterParent, ClientSize = new Size(250, 130), MaximizeBox = false, MinimizeBox = false };
-            var width = new NumericUpDown { Left = 105, Top = 12, Width = 120, Minimum = 1, Maximum = 100000, Value = Math.Max(1, element.Width) };
-            var height = new NumericUpDown { Left = 105, Top = 42, Width = 120, Minimum = 1, Maximum = 100000, Value = Math.Max(1, element.Height) };
+            var width = new NumericUpDown { Left = 105, Top = 12, Width = 120, Minimum = 1, Maximum = 100000, Value = Math.Min(100000, Math.Max(1, Math.Abs(element.Width))) };
+            var height = new NumericUpDown { Left = 105, Top = 42, Width = 120, Minimum = 1, Maximum = 100000, Value = Math.Min(100000, Math.Max(1, Math.Abs(element.Height))) };
             var ok = new Button { Text = "확인", Left = 65, Top = 83, DialogResult = DialogResult.OK };
             var cancel = new Button { Text = "취소", Left = 150, Top = 83, DialogResult = DialogResult.Cancel };
             dialog.Controls.AddRange(new Control[] { new Label { Text = "너비 (px)", Left = 12, Top = 14 }, new Label { Text = "높이 (px)", Left = 12, Top = 44 }, width, height, ok, cancel });
@@ -4510,8 +4516,9 @@ namespace Greenshot.Editor.Drawing
             if (dialog.ShowDialog(FindForm()) == DialogResult.OK)
             {
                 element.MakeBoundsChangeUndoable(false);
-                element.Width = (int)width.Value;
-                element.Height = (int)height.Value;
+                // 왕캡: a flipped element has a negative width or height, it stays flipped (the dialog showed 1 for it before)
+                element.Width = element.Width < 0 ? -(int)width.Value : (int)width.Value;
+                element.Height = element.Height < 0 ? -(int)height.Value : (int)height.Value;
                 Modified = true;
                 Invalidate();
             }
@@ -4524,14 +4531,39 @@ namespace Greenshot.Editor.Drawing
         {
             if (!HasSelectedElements || selectedElements.Count < 2) return;
 
-            var group = new GroupContainer(this);
-            var selected = selectedElements.Cast<DrawableContainer>().ToList();
+            // 왕캡: the children keep their order on the surface (z-order) inside the group
+            var selected = _elements.Where(element => selectedElements.Contains(element)).ToList();
+            if (selected.Count < 2) return;
+
+            // 왕캡: a filter (pixelate, blur, highlight, magnifier) works on the image below it at its place on the surface.
+            // Inside a group it would be drawn as a plain frame and lose its effect, so such a selection is not grouped.
+            if (selected.Any(element => element is FilterContainer || element is DrawableContainer { HasFilters: true }))
+            {
+                SendMessageEvent(this, SurfaceMessageTyp.Info, "모자이크, 흐림, 강조, 돋보기 같은 효과 개체는 그룹으로 묶을 수 없어요. 효과 개체를 빼고 다시 선택해 주세요.");
+                return;
+            }
+
+            var originalIndices = selected.Select(element => _elements.IndexOf(element)).ToList();
+            var group = GroupElements(selected, new GroupContainer(this));
+            var step = new GroupMemento.Step(group, selected, _elements.IndexOf(group), originalIndices);
+            MakeUndoable(new GroupMemento(this, new List<GroupMemento.Step> { step }, true, false), false);
+        }
+
+        /// <summary>
+        /// 왕캡: put the elements into the group (without undo), the group takes their place on the surface and is selected
+        /// </summary>
+        /// <param name="elements">the elements, in z-order</param>
+        /// <param name="group">the group</param>
+        /// <param name="groupIndex">place of the group in the element list, null: the place of the topmost element</param>
+        internal GroupContainer GroupElements(IList<IDrawableContainer> elements, GroupContainer group, int? groupIndex = null)
+        {
+            int topIndex = elements.Count == 0 ? _elements.Count : elements.Max(element => _elements.IndexOf(element));
 
             // 자식들을 그룹에 추가 (그룹 로컬 좌표로 변환)
-            foreach (var element in selected)
+            foreach (var element in elements)
             {
                 element.Invalidate();
-                RemoveElement(element);
+                RemoveElement(element, false);
                 group.AddChildToGroup(element);
             }
 
@@ -4539,10 +4571,39 @@ namespace Greenshot.Editor.Drawing
             group.UpdateBoundsFromChildren();
 
             // 그룹을 표면에 추가하고 선택
-            AddElement(group);
+            AddElement(group, false);
+            SetElementIndex(group, groupIndex ?? Math.Max(0, topIndex - (elements.Count - 1)));
             DeselectAllElements();
             SelectElement(group);
             _modified = true;
+            return group;
+        }
+
+        /// <summary>
+        /// 왕캡: take the group apart (without undo), its children are on the surface again with the coordinates of the surface
+        /// </summary>
+        /// <param name="group">the group</param>
+        /// <param name="childIndices">places of the children in the element list, null: the place of the group</param>
+        internal List<IDrawableContainer> UngroupElement(GroupContainer group, IList<int> childIndices = null)
+        {
+            int groupIndex = Math.Max(0, _elements.IndexOf(group));
+            var children = group.Ungroup().ToList();
+            RemoveElement(group, false);
+            for (int i = 0; i < children.Count; i++)
+            {
+                AddElement(children[i], false);
+                SetElementIndex(children[i], childIndices != null && i < childIndices.Count ? childIndices[i] : groupIndex + i);
+            }
+
+            _modified = true;
+            return children;
+        }
+
+        private void SetElementIndex(IDrawableContainer element, int index)
+        {
+            if (!_elements.Remove(element)) return;
+            _elements.Insert(Math.Max(0, Math.Min(index, _elements.Count)), element);
+            NotifyAccessibleReorder();
         }
 
         /// <summary>
@@ -4556,20 +4617,18 @@ namespace Greenshot.Editor.Drawing
             if (groups.Count == 0) return;
 
             var allUngroupedChildren = new List<IDrawableContainer>();
+            var steps = new List<GroupMemento.Step>();
 
             foreach (var group in groups)
             {
-                // 그룹을 제거하고 자식들을 표면으로 이동
-                var children = group.Ungroup().ToList();
-                RemoveElement(group);
-
-                foreach (var child in children)
-                {
-                    child.Parent = this;
-                    AddElement(child);
-                    allUngroupedChildren.Add(child);
-                }
+                // 그룹을 제거하고 자식들을 표면으로 이동 (왕캡: 실행 취소는 한 번에)
+                int groupIndex = _elements.IndexOf(group);
+                var children = UngroupElement(group);
+                allUngroupedChildren.AddRange(children);
+                steps.Add(new GroupMemento.Step(group, children, groupIndex, children.Select(child => _elements.IndexOf(child)).ToList()));
             }
+
+            MakeUndoable(new GroupMemento(this, steps, false, false), false);
 
             // 자식들을 선택
             DeselectAllElements();
@@ -4582,72 +4641,9 @@ namespace Greenshot.Editor.Drawing
         }
 
         /// <summary>
-        /// 선택한 개체 병합
-        /// </summary>
-        public void MergeSelected()
-        {
-            if (!HasSelectedElements || selectedElements.Count < 2) return;
-            // 비트맵으로 렌더링 후 이미지 컨테이너로 변환
-            var bounds = selectedElements.DrawingBounds;
-            var image = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppArgb);
-            using (var g = Graphics.FromImage(image))
-            {
-                g.Clear(Color.Transparent);
-                // Z-order: elements later in _elements list are on top
-                foreach (var element in _elements.OfType<DrawableContainer>()
-                    .Where(e => selectedElements.Contains(e))
-                    .OrderBy(e => _elements.IndexOf(e)))
-                {
-                    element.Draw(g, RenderMode.EDIT);
-                }
-            }
-            var container = new ImageContainer(this) { Image = image, Left = bounds.X, Top = bounds.Y };
-            foreach (var element in selectedElements.ToList())
-            {
-                RemoveElement(element);
-            }
-            AddElement(container);
-            SelectElement(container);
-            _modified = true;
-        }
-
-        /// <summary>
-        /// 템플릿으로 저장
-        /// </summary>
-        public void SaveAsTemplate()
-        {
-            if (!HasSelectedElements) return;
-            // TODO: 템플릿 저장 구현
-        }
-
-        /// <summary>
         /// 그리드 표시 토글
         /// </summary>
         public bool ShowGrid { get; set; }
-
-        /// <summary>
-        /// 캔버스 중앙 정렬
-        /// </summary>
-        public void CenterCanvas()
-        {
-            if (Image == null) return;
-            var visibleArea = GetVisibleArea();
-            var centerX = (Image.Width - visibleArea.Width) / 2;
-            var centerY = (Image.Height - visibleArea.Height) / 2;
-            // The scroll position is managed by the panel in ImageEditorForm
-            // We'll use the ScrollPosition property if available
-            var scrollX = centerX;
-            var scrollY = centerY;
-            // This will be called from ImageEditorForm which has access to the panel
-        }
-
-        /// <summary>
-        /// 캔버스 여백 설정 대화상자
-        /// </summary>
-        public void ShowCanvasMarginDialog()
-        {
-            // TODO: 여백 설정 대화상자 구현
-        }
 
         /// <summary>
         /// OCR 텍스트 복사

@@ -1362,6 +1362,7 @@ namespace Greenshot.Editor.Forms
 
             ShowDrawingMode(_surface.DrawingMode);
             UpdateDestinationButtons();
+            UpdateGridButton();
             ShowTabState(tab, announce: false);
             RefreshEditorControls();
         }

@@ -49,7 +49,8 @@ namespace Greenshot.Editor.Drawing
         private static readonly ILog LOG = LogManager.GetLogger(typeof(GroupContainer));
 
         private bool _updatingChildren = false;
-        private NativeRect _lastChildrenBounds = NativeRect.Empty;
+        // 왕캡: not serialized (the clipboard and .greenshot files only allow known types)
+        [NonSerialized] private NativeRect _lastChildrenBounds = NativeRect.Empty;
 
         public GroupContainer(ISurface parent) : base(parent)
         {
@@ -65,6 +66,25 @@ namespace Greenshot.Editor.Drawing
         private void Init()
         {
             CreateDefaultAdorners();
+            // 왕캡: the events are not serialized, a pasted group listens to its children again
+            foreach (var child in Children.OfType<IDrawableContainer>())
+            {
+                child.PropertyChanged -= Child_PropertyChanged;
+                child.PropertyChanged += Child_PropertyChanged;
+            }
+        }
+
+        /// <summary>
+        /// 왕캡: the children of a group have the surface as parent too (they are not in the element list of the surface),
+        /// otherwise their changes are not invalidated and their field changes cannot be undone. Also when the group is pasted, undone or redone.
+        /// </summary>
+        protected override void SwitchParent(ISurface newParent)
+        {
+            base.SwitchParent(newParent);
+            foreach (var child in Children.OfType<IDrawableContainer>())
+            {
+                child.Parent = newParent;
+            }
         }
 
         public override bool HasDefaultSize => false;
@@ -135,6 +155,7 @@ namespace Greenshot.Editor.Drawing
         public void AddChildToGroup(IDrawableContainer child)
         {
             AddChild((IFieldHolder)child);
+            child.Parent = Parent;
             if (!_updatingChildren)
             {
                 child.PropertyChanged += Child_PropertyChanged;
@@ -163,8 +184,22 @@ namespace Greenshot.Editor.Drawing
 
         public override void Draw(Graphics graphics, RenderMode renderMode)
         {
-            // 그룹 자체는 그리지 않음 (자식들이 그림)
-            // 선택 시 아도너만 표시됨
+            // 그룹 자체의 테두리는 그리지 않음, 선택 시 아도너만 표시됨.
+            // 왕캡: 자식들은 표면의 개체 목록에서 빠지므로 그룹이 그려 줘야 한다 (그렇지 않으면 그룹으로 묶는 순간 사라졌다).
+            // 자식 좌표는 그룹 기준이므로 그룹 위치만큼 옮겨서 그린다.
+            foreach (var child in Children.OfType<DrawableContainer>())
+            {
+                var state = graphics.Save();
+                try
+                {
+                    graphics.TranslateTransform(Left, Top);
+                    child.Draw(graphics, renderMode);
+                }
+                finally
+                {
+                    graphics.Restore(state);
+                }
+            }
         }
 
         public override bool Contains(int x, int y)
@@ -229,9 +264,20 @@ namespace Greenshot.Editor.Drawing
             _updatingChildren = true;
             try
             {
+                // 왕캡: the children are mirrored in the box of the group (their places swap too), not each in its own box
                 foreach (var child in Children.OfType<DrawableContainer>())
                 {
-                    child.Flip(horizontal);
+                    child.Invalidate();
+                    if (horizontal)
+                    {
+                        child.Left = Width - child.Left;
+                        child.Width = -child.Width;
+                    }
+                    else
+                    {
+                        child.Top = Height - child.Top;
+                        child.Height = -child.Height;
+                    }
                 }
                 UpdateBoundsFromChildren();
             }

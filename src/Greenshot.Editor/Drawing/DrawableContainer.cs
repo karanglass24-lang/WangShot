@@ -49,15 +49,16 @@ namespace Greenshot.Editor.Drawing
     [Serializable]
     public class FormatSnapshot
     {
-        public Color FillColor { get; set; } = Color.Transparent;
-        public Color LineColor { get; set; } = Color.Transparent;
-        public int LineThickness { get; set; } = 0;
+        public Color? FillColor { get; set; }
+        public Color? LineColor { get; set; }
+        public int? LineThickness { get; set; }
         public string FontFamily { get; set; }
-        public float FontSize { get; set; } = 0f;
-        public bool FontBold { get; set; } = false;
-        public bool FontItalic { get; set; } = false;
-        public string TextAlignment { get; set; }
-        public bool Shadow { get; set; } = false;
+        public float? FontSize { get; set; }
+        public bool? FontBold { get; set; }
+        public bool? FontItalic { get; set; }
+        // 왕캡: the field holds a StringAlignment; a string made the text containers throw an InvalidCastException when they were drawn
+        public StringAlignment? TextAlignment { get; set; }
+        public bool? Shadow { get; set; }
     }
 
     /// <summary>
@@ -824,15 +825,15 @@ namespace Greenshot.Editor.Drawing
         {
             return new FormatSnapshot
             {
-                FillColor = HasField(FieldType.FILL_COLOR) ? GetFieldValueAsColor(FieldType.FILL_COLOR) : Color.Transparent,
-                LineColor = HasField(FieldType.LINE_COLOR) ? GetFieldValueAsColor(FieldType.LINE_COLOR) : Color.Transparent,
-                LineThickness = HasField(FieldType.LINE_THICKNESS) ? GetFieldValueAsInt(FieldType.LINE_THICKNESS) : 0,
+                FillColor = HasField(FieldType.FILL_COLOR) ? GetFieldValueAsColor(FieldType.FILL_COLOR) : null,
+                LineColor = HasField(FieldType.LINE_COLOR) ? GetFieldValueAsColor(FieldType.LINE_COLOR) : null,
+                LineThickness = HasField(FieldType.LINE_THICKNESS) ? GetFieldValueAsInt(FieldType.LINE_THICKNESS) : null,
                 FontFamily = HasField(FieldType.FONT_FAMILY) ? GetFieldValueAsString(FieldType.FONT_FAMILY) : null,
-                FontSize = HasField(FieldType.FONT_SIZE) ? GetFieldValueAsFloat(FieldType.FONT_SIZE) : 0f,
-                FontBold = HasField(FieldType.FONT_BOLD) ? GetFieldValueAsBool(FieldType.FONT_BOLD) : false,
-                FontItalic = HasField(FieldType.FONT_ITALIC) ? GetFieldValueAsBool(FieldType.FONT_ITALIC) : false,
-                TextAlignment = HasField(FieldType.TEXT_HORIZONTAL_ALIGNMENT) ? GetFieldValueAsString(FieldType.TEXT_HORIZONTAL_ALIGNMENT) : null,
-                Shadow = HasField(FieldType.SHADOW) ? GetFieldValueAsBool(FieldType.SHADOW) : false
+                FontSize = HasField(FieldType.FONT_SIZE) ? GetFieldValueAsFloat(FieldType.FONT_SIZE) : null,
+                FontBold = HasField(FieldType.FONT_BOLD) ? GetFieldValueAsBool(FieldType.FONT_BOLD) : null,
+                FontItalic = HasField(FieldType.FONT_ITALIC) ? GetFieldValueAsBool(FieldType.FONT_ITALIC) : null,
+                TextAlignment = HasField(FieldType.TEXT_HORIZONTAL_ALIGNMENT) && GetFieldValue(FieldType.TEXT_HORIZONTAL_ALIGNMENT) is StringAlignment alignment ? alignment : null,
+                Shadow = HasField(FieldType.SHADOW) ? GetFieldValueAsBool(FieldType.SHADOW) : null
             };
         }
 
@@ -842,15 +843,15 @@ namespace Greenshot.Editor.Drawing
         public virtual void ApplyFormat(FormatSnapshot format)
         {
             if (format == null) return;
-            if (HasField(FieldType.FILL_COLOR)) SetFieldValue(FieldType.FILL_COLOR, format.FillColor);
-            if (HasField(FieldType.LINE_COLOR)) SetFieldValue(FieldType.LINE_COLOR, format.LineColor);
-            if (HasField(FieldType.LINE_THICKNESS)) SetFieldValue(FieldType.LINE_THICKNESS, format.LineThickness);
+            if (HasField(FieldType.FILL_COLOR) && format.FillColor.HasValue) SetFieldValue(FieldType.FILL_COLOR, format.FillColor.Value);
+            if (HasField(FieldType.LINE_COLOR) && format.LineColor.HasValue) SetFieldValue(FieldType.LINE_COLOR, format.LineColor.Value);
+            if (HasField(FieldType.LINE_THICKNESS) && format.LineThickness.HasValue) SetFieldValue(FieldType.LINE_THICKNESS, format.LineThickness.Value);
             if (HasField(FieldType.FONT_FAMILY) && format.FontFamily != null) SetFieldValue(FieldType.FONT_FAMILY, format.FontFamily);
-            if (HasField(FieldType.FONT_SIZE) && format.FontSize > 0) SetFieldValue(FieldType.FONT_SIZE, format.FontSize);
-            if (HasField(FieldType.FONT_BOLD)) SetFieldValue(FieldType.FONT_BOLD, format.FontBold);
-            if (HasField(FieldType.FONT_ITALIC)) SetFieldValue(FieldType.FONT_ITALIC, format.FontItalic);
-            if (HasField(FieldType.TEXT_HORIZONTAL_ALIGNMENT) && format.TextAlignment != null) SetFieldValue(FieldType.TEXT_HORIZONTAL_ALIGNMENT, format.TextAlignment);
-            if (HasField(FieldType.SHADOW)) SetFieldValue(FieldType.SHADOW, format.Shadow);
+            if (HasField(FieldType.FONT_SIZE) && format.FontSize > 0) SetFieldValue(FieldType.FONT_SIZE, format.FontSize.Value);
+            if (HasField(FieldType.FONT_BOLD) && format.FontBold.HasValue) SetFieldValue(FieldType.FONT_BOLD, format.FontBold.Value);
+            if (HasField(FieldType.FONT_ITALIC) && format.FontItalic.HasValue) SetFieldValue(FieldType.FONT_ITALIC, format.FontItalic.Value);
+            if (HasField(FieldType.TEXT_HORIZONTAL_ALIGNMENT) && format.TextAlignment.HasValue) SetFieldValue(FieldType.TEXT_HORIZONTAL_ALIGNMENT, format.TextAlignment.Value);
+            if (HasField(FieldType.SHADOW) && format.Shadow.HasValue) SetFieldValue(FieldType.SHADOW, format.Shadow.Value);
             Invalidate();
         }
 
@@ -859,15 +860,16 @@ namespace Greenshot.Editor.Drawing
         /// </summary>
         public virtual void Flip(bool horizontal)
         {
-            var bounds = Bounds;
+            // 왕캡: the start moves to the other edge, so the element is mirrored in its own box (it moved by its width before)
+            Invalidate();
             if (horizontal)
             {
-                Left = bounds.Left;
+                Left += Width;
                 Width = -Width;
             }
             else
             {
-                Top = bounds.Top;
+                Top += Height;
                 Height = -Height;
             }
             Invalidate();

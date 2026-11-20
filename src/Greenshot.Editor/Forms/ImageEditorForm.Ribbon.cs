@@ -12,6 +12,7 @@ using Greenshot.Editor.Controls;
 using Greenshot.Editor.Drawing;
 using Greenshot.Editor.Drawing.Fields;
 using Greenshot.Editor.Drawing.Fields.Binding;
+using Greenshot.Editor.Helpers;
 
 namespace Greenshot.Editor.Forms
 {
@@ -35,6 +36,8 @@ namespace Greenshot.Editor.Forms
         private RecentCapturesPanel _recentCapturesPanel;
         private ToolStripButton _recentCapturesButton;
         private ToolStripButton _fullscreenButton;
+        // 왕캡: the grid belongs to the image of a tab, the button shows the state of the shown tab
+        private ToolStripButton _gridButton;
         // 왕샷: 서식 컨텍스트 탭 인덱스
         private int _formatTabIndex = -1;
         // 왕샷: 서식 탭의 컨트롤들 (표면이 연결될 때 바인딩한다 - 폼 생성 시에는 _surface가 아직 없다)
@@ -261,7 +264,7 @@ namespace Greenshot.Editor.Forms
             AddRibbonGroup(obj, "복사 · 서식",
                 (NewAction("개체 복사", "선택한 개체를 편집기에 붙여넣을 수 있도록 복사 (Ctrl+Shift+C)", "copyToolStripMenuItem.Image", (s, e) => CopySelectedObjectsToClipboard()), null),
                 (NewAction("서식 복사", "선택한 개체의 서식 저장", "btnCopy.Image", (s, e) => CopyFormat()), null),
-                (NewAction("서식 적용", "복사한 서식을 선택한 개체에 적용", "btnPaste.Image", (s, e) => _surface?.PasteFormat()), null));
+                (NewAction("서식 적용", "복사한 서식을 선택한 개체에 적용", "btnPaste.Image", (s, e) => PasteFormat()), null));
 
             AddRibbonGroup(obj, "개체 파일",
                 (ProxyIcon(saveElementsToolStripMenuItem, "개체 저장", "btnSave.Image"), null),
@@ -291,7 +294,7 @@ namespace Greenshot.Editor.Forms
             _recentCapturesButton.CheckOnClick = true;
 
             var gridButton = NewAction("그리드", "격자(그리드) 보이기/숨기기", "grid.Image", (s, e) => ToggleGrid());
-            gridButton.CheckOnClick = true;
+            _gridButton = gridButton;
 
             _fullscreenButton = NewAction("전체 화면", FullscreenTip, "fullscreen.Image", (s, e) => ToggleFullscreen());
             AddRibbonGroup(view, "표시", (rulerButton, null), (_recentCapturesButton, null), (gridButton, null), (_fullscreenButton, null));
@@ -730,17 +733,18 @@ namespace Greenshot.Editor.Forms
 
             try
             {
-                // The PDF plugin writes it with its own settings (page size, margins, scaling), the same as the PDF destination
-                try
-                {
-                    ImageIO.Save(_surface, dialog.FileName, true, new Greenshot.Base.Interfaces.Plugin.SurfaceOutputSettings("pdf"), false);
-                }
-                catch (Exception pluginException)
-                {
-                    Log.Warn("The PDF plugin could not save " + dialog.FileName + ", the built in PDF export is used", pluginException);
-                    using var image = _surface.GetImageForExport();
-                    PdfExport.Save(image, dialog.FileName);
-                }
+                // The PDF plugin writes it with its own settings (page size, margins, scaling), the same as the PDF destination.
+                // 왕캡: into a temporary file, which replaces the target only when it is complete: a plugin which fails after creating
+                // the file left a partial or empty .pdf behind before. Then the built in export is used.
+                SafeFileWriter.Write(
+                    dialog.FileName,
+                    temp => ImageIO.Save(_surface, temp, true, new Greenshot.Base.Interfaces.Plugin.SurfaceOutputSettings("pdf"), false),
+                    temp =>
+                    {
+                        using var image = _surface.GetImageForExport();
+                        PdfExport.Save(image, temp);
+                    },
+                    pluginException => Log.Warn("The PDF plugin could not save " + dialog.FileName + ", the built in PDF export is used", pluginException));
             }
             catch (Exception ex)
             {
@@ -1024,6 +1028,18 @@ namespace Greenshot.Editor.Forms
         }
 
         /// <summary>
+        /// 서식 적용: 왕캡 - 실행 취소 버튼이 바로 켜지도록 갱신한다
+        /// </summary>
+        private void PasteFormat()
+        {
+            if (_surface?.HasSelectedElements == true)
+            {
+                _surface.PasteFormat();
+                UpdateUndoRedoSurfaceDependencies();
+            }
+        }
+
+        /// <summary>
         /// 선택한 개체 수평/수직 뒤집기
         /// </summary>
         private void FlipSelected(bool horizontal)
@@ -1031,6 +1047,7 @@ namespace Greenshot.Editor.Forms
             if (_surface?.HasSelectedElements == true)
             {
                 _surface.FlipSelected(horizontal);
+                UpdateUndoRedoSurfaceDependencies();
             }
         }
 
@@ -1064,6 +1081,7 @@ namespace Greenshot.Editor.Forms
             if (_surface?.HasSelectedElements == true)
             {
                 _surface.GroupSelected();
+                UpdateUndoRedoSurfaceDependencies();
             }
         }
 
@@ -1075,28 +1093,7 @@ namespace Greenshot.Editor.Forms
             if (_surface?.HasSelectedElements == true)
             {
                 _surface.UngroupSelected();
-            }
-        }
-
-        /// <summary>
-        /// 선택한 개체 병합
-        /// </summary>
-        private void MergeSelected()
-        {
-            if (_surface?.HasSelectedElements == true)
-            {
-                _surface.MergeSelected();
-            }
-        }
-
-        /// <summary>
-        /// 템플릿으로 저장
-        /// </summary>
-        private void SaveAsTemplate()
-        {
-            if (_surface?.HasSelectedElements == true)
-            {
-                _surface.SaveAsTemplate();
+                UpdateUndoRedoSurfaceDependencies();
             }
         }
 
@@ -1109,6 +1106,19 @@ namespace Greenshot.Editor.Forms
             {
                 _surface.ShowGrid = !_surface.ShowGrid;
                 _surface.Invalidate();
+            }
+
+            UpdateGridButton();
+        }
+
+        /// <summary>
+        /// 왕캡: the grid button is checked when the grid of the shown tab is on (it kept the state of the last tab before)
+        /// </summary>
+        private void UpdateGridButton()
+        {
+            if (_gridButton != null)
+            {
+                _gridButton.Checked = _surface?.ShowGrid == true;
             }
         }
 
@@ -1226,15 +1236,6 @@ namespace Greenshot.Editor.Forms
                 Log.Warn("Could not copy OCR text", ex);
                 MessageBox.Show(this, "글자를 인식하거나 복사하지 못했습니다.", "왕캡", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
-        }
-
-        /// <summary>
-        /// 배치 처리 대화상자
-        /// </summary>
-        private void ShowBatchDialog()
-        {
-            // TODO: 배치 처리 구현
-            MessageBox.Show(this, "배치 처리 기능은 준비 중입니다.", "왕캡", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
     }
 }

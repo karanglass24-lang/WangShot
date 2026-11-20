@@ -234,10 +234,35 @@ namespace Greenshot.Capturing
 
             return current;
         }
+
+        /// <summary>
+        /// 왕캡: scroll back by <paramref name="delta"/> and check that the view is the last accepted picture again.
+        /// A page which had moved less than the step scrolls too far up: then it is scrolled down in small steps (at most 10) until the view is the same.
+        /// </summary>
+        /// <returns>false when the view could not be restored</returns>
+        private static async Task<bool> RestoreViewAsync(Rectangle rect, Bitmap lastFrame, int delta)
+        {
+            mouse_event(0x0800 /* MOUSEEVENTF_WHEEL */, 0, 0, unchecked((uint)delta), UIntPtr.Zero);
+            for (int attempt = 0; attempt < 10; attempt++)
+            {
+                using var view = await GrabSettledAsync(rect, attempt == 0 ? 500 : 350).ConfigureAwait(false);
+                if (view != null && view.Size == lastFrame.Size && Same(lastFrame, view))
+                {
+                    return true;
+                }
+
+                mouse_event(0x0800, 0, 0, unchecked((uint)(-Math.Max(20, delta / 4))), UIntPtr.Zero);
+            }
+
+            return false;
+        }
+
         private static async Task<(Bitmap Result, int Frames, bool StoppedByUser)> CaptureAllAsync(Rectangle rect, POINT originalCursor)
         {
             var stitcher = new ScrollStitcher();
             bool stopped = false;
+            // 왕캡: the last picture which was put into the result: after a failed try the view has to be this one again
+            Bitmap lastFrame = null;
             try
             {
                 // The mouse over the middle of the page: the wheel scrolls what is under it
@@ -246,6 +271,7 @@ namespace Greenshot.Capturing
                 using (var first = Grab(rect))
                 {
                     stitcher.Start(first);
+                    lastFrame = (Bitmap)first.Clone();
                 }
 
                 // Start conservatively: a large first jump can lose the overlap needed to stitch.
@@ -268,7 +294,12 @@ namespace Greenshot.Capturing
                     {
                         using var current = await GrabSettledAsync(rect, retry == 0 ? 350 : 700).ConfigureAwait(false);
                         added = stitcher.TryAdd(current);
-                        if (!added)
+                        if (added)
+                        {
+                            lastFrame.Dispose();
+                            lastFrame = (Bitmap)current.Clone();
+                        }
+                        else
                         {
                             atEnd = stitcher.LooksLikeLast(current);
                         }
@@ -279,8 +310,14 @@ namespace Greenshot.Capturing
                         // The jump was probably too big and lost the overlap: go back, take a smaller step and try again
                         if (!atEnd && delta > 20 && shrinks < 4)
                         {
-                            mouse_event(0x0800, 0, 0, unchecked((uint)delta), UIntPtr.Zero);
-                            await Task.Delay(500).ConfigureAwait(false);
+                            // 왕캡: when the page had moved less than the step (end of the page) the scroll back goes too far up:
+                            // the view is checked against the last picture and scrolled down until it is the same, or the capture ends with what it has
+                            if (!await RestoreViewAsync(rect, lastFrame, delta).ConfigureAwait(false))
+                            {
+                                Log.Warn("Scroll capture: the view could not be brought back to the last picture, the result so far is used");
+                                break;
+                            }
+
                             delta = Math.Max(20, delta / 2);
                             shrinks++;
                             continue;
@@ -305,6 +342,7 @@ namespace Greenshot.Capturing
             }
             finally
             {
+                lastFrame?.Dispose();
                 SetCursorPos(originalCursor.X, originalCursor.Y);
             }
         }
